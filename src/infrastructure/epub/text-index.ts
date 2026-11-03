@@ -75,13 +75,15 @@ export function createIndexScheduler(
     }),
 ) {
   let deadline = performance.now() + 8;
-  return async (force = false) => {
+  return (force = false) => {
     signal.throwIfAborted();
     if (force || performance.now() >= deadline) {
-      await yieldTask();
-      signal.throwIfAborted();
-      deadline = performance.now() + 8;
+      return yieldTask().then(() => {
+        signal.throwIfAborted();
+        deadline = performance.now() + 8;
+      });
     }
+    return undefined;
   };
 }
 export type IndexScheduler = ReturnType<typeof createIndexScheduler>;
@@ -165,7 +167,8 @@ export async function indexTextSection(
         }
       }
     }
-    await schedule();
+    const pause = schedule();
+    if (pause) await pause;
   }
   const source = raw.join('');
   let runIndex = 0;
@@ -284,7 +287,8 @@ export async function indexTextSection(
             value === piece.value,
         );
       }
-      await schedule();
+      const pause = schedule();
+      if (pause) await pause;
     }
     base = limit;
     await schedule(true);
@@ -325,7 +329,8 @@ export async function indexTextSection(
         /[\p{L}\p{M}\p{N}]/u.test(piece.value.charAt(0))
       ) {
         previous.end = base + piece.value.length;
-        await schedule();
+        const pause = schedule();
+        if (pause) await pause;
         continue;
       }
       tokens.push({
@@ -337,7 +342,8 @@ export async function indexTextSection(
             ? 'space'
             : 'punctuation',
       });
-      await schedule();
+      const pause = schedule();
+      if (pause) await pause;
     }
     base = end;
     await schedule(true);
@@ -355,6 +361,7 @@ export async function buildDocumentTextIndex(
   }[],
   signal: AbortSignal,
   yieldTask?: () => Promise<void>,
+  onSection?: (completed: number, total: number) => void,
 ): Promise<DocumentTextIndex> {
   const schedule = createIndexScheduler(signal, yieldTask);
   const segmentation =
@@ -362,6 +369,7 @@ export async function buildDocumentTextIndex(
   const result: DocumentTextSection[] = [];
   let total = 0;
   for (const section of sections) {
+    onSection?.(result.length, sections.length);
     await schedule(true);
     const indexed = await indexTextSection(
       await section.load(),

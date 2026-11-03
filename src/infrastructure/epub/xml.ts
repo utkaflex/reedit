@@ -174,10 +174,22 @@ export function checkDocument(
         );
       ids.add(id);
     }
-    if (tag === 'meta' && element.hasAttribute('http-equiv'))
+    // Calibre and many EPUB 2 publishers include a passive encoding declaration.
+    // This must not be confused with refresh/CSP/cookie directives.
+    if (
+      tag === 'meta' &&
+      element.hasAttribute('http-equiv') &&
+      !(
+        element.getAttribute('http-equiv')?.trim().toLowerCase() ===
+          'content-type' &&
+        /^(?:text\/html|application\/xhtml\+xml)\s*;\s*charset\s*=\s*["']?utf-(?:8|16(?:le|be)?)["']?\s*$/i.test(
+          element.getAttribute('content') ?? '',
+        )
+      )
+    )
       throw new EpubImportError(
         'unsafe',
-        `Активные meta-директивы запрещены: ${path}.`,
+        `В файле «${path}» обнаружена команда браузеру, которую читалка не поддерживает. Выберите другое издание EPUB.`,
       );
     for (const attribute of Array.from(element.attributes)) {
       const name = attribute.localName.toLowerCase();

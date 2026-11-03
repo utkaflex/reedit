@@ -43,6 +43,7 @@ export function EpubImportDialog({
   const [bookId, setBookId] = useState<string>(target ?? 'new');
   const [duplicateWarning, setDuplicateWarning] = useState(false);
   const [allowDuplicate, setAllowDuplicate] = useState(false);
+  const [useEmbeddedCover, setUseEmbeddedCover] = useState(true);
   const busy = phase === 'working' || phase === 'saving';
   const lock = useRef(false);
   const coverUrl = useBlobUrl(analysis?.cover ?? null);
@@ -118,6 +119,7 @@ export function EpubImportDialog({
           targetBookId: selected?.id ?? null,
           title,
           allowDuplicateBook: allowDuplicate,
+          useEmbeddedCover,
         },
         controller.current.signal,
       );
@@ -225,6 +227,20 @@ export function EpubImportDialog({
                 alt={`Встроенная обложка ${label}`}
               />
             )}
+            {analysis.cover &&
+              bookId !== 'new' &&
+              !books.find((book) => book.id === bookId)?.cover && (
+                <label className="import-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={useEmbeddedCover}
+                    onChange={(event) => {
+                      setUseEmbeddedCover(event.target.checked);
+                    }}
+                  />
+                  Использовать обложку из файла
+                </label>
+              )}
             <p>
               <strong>{analysis.metadata.title}</strong>
               <br />

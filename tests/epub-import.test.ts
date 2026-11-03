@@ -271,6 +271,41 @@ it('повторный и конкурентный импорт идентичн
   const existing = await store.findEpubByHash(analysis.sha256);
   expect(existing).toBeDefined();
 });
+it.each([false, true])(
+  'по выбору пользователя берёт обложку EPUB, сохраняя существующую (своя обложка: %s)',
+  async (customCover) => {
+    const personalCover = customCover
+      ? new Blob(['personal cover'], { type: 'image/png' })
+      : null;
+    const book = makeBook({
+      title: 'Моя книга',
+      authors: 'Автор',
+      description: 'Не менять',
+      genres: '',
+      isbn: '',
+      cover: personalCover,
+    });
+    await store.saveLibraryBook(book, {
+      expectedUpdatedAt: null,
+      allowDuplicate: false,
+      initialReading: initialReading(book),
+    });
+    const { analysis, controller } = await prepared();
+    await saveEpub(
+      store,
+      analysis,
+      { ...options, targetBookId: book.id, useEmbeddedCover: true },
+      controller.signal,
+    );
+    const saved = await store.repositories.books.get(book.id);
+    expect(saved?.cover?.size).toBe((personalCover ?? analysis.cover)?.size);
+    expect(saved?.description).toBe(book.description);
+    expect(saved?.authors).toEqual(book.authors);
+    expect(await saved?.cover?.arrayBuffer()).toEqual(
+      await (personalCover ?? analysis.cover)?.arrayBuffer(),
+    );
+  },
+);
 it('ошибка квоты при записи индекса откатывает книгу, файл и прочтение целиком', async () => {
   const { analysis, controller } = await prepared();
   vi.spyOn(db.records('epubIndexes'), 'put').mockRejectedValueOnce(

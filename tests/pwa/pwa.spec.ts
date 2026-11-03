@@ -410,6 +410,7 @@ test('закрытый браузер запускается офлайн из �
       .click();
     await expect(page).toHaveURL(/#\/library$/);
     await page.goto('/#/statistics');
+    await page.getByText('Подробная статистика', { exact: true }).click();
     await expect(
       page.getByRole('heading', { name: 'Ритм чтения', exact: true }),
     ).toBeVisible();

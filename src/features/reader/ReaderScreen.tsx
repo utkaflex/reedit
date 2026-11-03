@@ -43,6 +43,8 @@ export function ReaderScreen({
   );
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [fatal, setFatal] = useState('');
+  const [preparation, setPreparation] = useState('Подготавливаем книгу…');
+  const preparationStage = useRef('Подготавливаем книгу…');
   const [notice, setNotice] = useState<string | null>(null);
   const [title, setTitle] = useState('Чтение');
   const [index, setIndex] = useState<EpubIndex | null>(null);
@@ -106,6 +108,15 @@ export function ReaderScreen({
   }, [preferences.theme]);
   useEffect(() => {
     const abort = new AbortController();
+    let completed = false;
+    const openingTimer = setTimeout(() => {
+      if (completed || abort.signal.aborted) return;
+      setFatal(
+        `Открытие книги заняло слишком много времени. Не удалось завершить: «${preparationStage.current}». Попробуйте ещё раз или откройте другое издание. Файл и сохранённое место остались в библиотеке.`,
+      );
+      setState('error');
+      abort.abort();
+    }, 60000);
     const isCancelled = () => abort.signal.aborted;
     let current: ReaderSession | null = null;
     const positions = createPositionWriter(store, address, (next, message) => {
@@ -135,9 +146,17 @@ export function ReaderScreen({
           ...(data.documentIndex ? { documentIndex: data.documentIndex } : {}),
           onDocumentIndex: async (index) => {
             abort.signal.throwIfAborted();
+            preparationStage.current = 'Сохраняем подготовленный текст…';
+            setPreparation(preparationStage.current);
             return await store.cacheDocumentTextIndex(index);
           },
           signal: abort.signal,
+          onProgress: (message) => {
+            if (!abort.signal.aborted) {
+              preparationStage.current = message;
+              setPreparation(message);
+            }
+          },
           onInteraction: activityInteraction,
           onSelection: (value) => {
             if (!abort.signal.aborted) setSelection(value);
@@ -165,16 +184,25 @@ export function ReaderScreen({
           return;
         }
         session.current = current;
+        setReaderInstance(current);
+        setState('ready');
+        completed = true;
+        clearTimeout(openingTimer);
         const documentIndex = current.getTextIndex?.();
         if (documentIndex) {
-          await attachActivity(documentIndex, abort.signal);
+          try {
+            await attachActivity(documentIndex, abort.signal);
+          } catch {
+            if (!isCancelled())
+              setNotice(
+                'Книга открыта, но учёт времени пока недоступен. Продолжайте чтение; сохранение позиции работает отдельно.',
+              );
+          }
           if (isCancelled()) {
             current.destroy();
             return;
           }
         }
-        setReaderInstance(current);
-        setState('ready');
         if (address.savedId && address.savedKind) {
           const item = await store.repositories[address.savedKind].get(
             address.savedId,
@@ -201,6 +229,8 @@ export function ReaderScreen({
             setNotice('Сохранённый фрагмент или исходный файл недоступен.');
         }
       } catch (error) {
+        completed = true;
+        clearTimeout(openingTimer);
         if (!abort.signal.aborted) {
           setFatal(
             error instanceof Error
@@ -218,6 +248,7 @@ export function ReaderScreen({
     document.addEventListener('visibilitychange', flush);
     void start();
     return () => {
+      clearTimeout(openingTimer);
       abort.abort();
       current?.destroy();
       session.current = null;
@@ -367,7 +398,7 @@ export function ReaderScreen({
         )}
         {state === 'loading' && (
           <div className="reader-message" role="status">
-            Подготавливаем книгу и восстанавливаем позицию…
+            {preparation}
           </div>
         )}
         {state === 'error' && (

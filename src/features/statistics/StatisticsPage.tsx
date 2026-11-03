@@ -172,27 +172,29 @@ export function StatisticsPage({ store }: { store: LocalStore }) {
             {duration(summary.yearTime)} с книгами
           </p>
         </div>
-        <dl className="statistics-facts">
-          <div>
-            <dt>За текущий месяц</dt>
-            <dd>{summary.booksMonth}</dd>
-          </div>
-          <div>
-            <dt>За всё время</dt>
-            <dd>{summary.booksAll}</dd>
-          </div>
-          <div>
-            <dt>Средняя оценка за {year}</dt>
-            <dd>
-              {summary.averageRating?.toFixed(1) ?? '—'}
-              <small> / 5</small>
-            </dd>
-          </div>
-          <div>
-            <dt>Уникальных слов за всё время</dt>
-            <dd>{summary.uniqueWords.toLocaleString('ru')}</dd>
-          </div>
-        </dl>
+        {data.readings.length > 0 && (
+          <dl className="statistics-facts">
+            <div>
+              <dt>За текущий месяц</dt>
+              <dd>{summary.booksMonth}</dd>
+            </div>
+            <div>
+              <dt>За всё время</dt>
+              <dd>{summary.booksAll}</dd>
+            </div>
+            <div>
+              <dt>Средняя оценка за {year}</dt>
+              <dd>
+                {summary.averageRating?.toFixed(1) ?? '—'}
+                <small> / 5</small>
+              </dd>
+            </div>
+            <div>
+              <dt>Уникальных слов за всё время</dt>
+              <dd>{summary.uniqueWords.toLocaleString('ru')}</dd>
+            </div>
+          </dl>
+        )}
       </section>
       <section className="statistics-section">
         <h2>Цель на {year} год</h2>
@@ -250,267 +252,220 @@ export function StatisticsPage({ store }: { store: LocalStore }) {
           </Button>
         </form>
       </section>
-      <section className="statistics-section">
-        <h2>Время с книгами</h2>
-        <dl className="statistics-facts">
-          <div>
-            <dt>Сегодня</dt>
-            <dd>{duration(summary.dayTime)}</dd>
-          </div>
-          <div>
-            <dt>Эта неделя</dt>
-            <dd>{duration(summary.weekTime)}</dd>
-          </div>
-          <div>
-            <dt>Этот месяц</dt>
-            <dd>{duration(summary.monthTime)}</dd>
-          </div>
-          <div>
-            <dt>{year} год</dt>
-            <dd>{duration(summary.yearTime)}</dd>
-          </div>
-        </dl>
-        <p className="caption">
-          Активное время, без фонового воспроизведения и пауз. Неделя начинается
-          в понедельник. Часовой пояс: {zone}.
-        </p>
-      </section>
-      <section className="statistics-section">
-        <h2>Ритм чтения</h2>
-        <p className="caption">
-          {year} · от января к декабрю, строки — понедельник–воскресенье.
-        </p>
-        <div
-          className="activity-scroll"
-          tabIndex={0}
-          role="region"
-          aria-label="Календарь активности; подробности доступны в списке дней"
-        >
-          <div className="activity-calendar" aria-hidden="true">
-            {Array.from({ length: offset }, (_, i) => (
-              <span key={`gap-${String(i)}`} />
-            ))}
-            {calendar.map((day) => {
-              const ms = summary.days.get(day) ?? 0;
-              return (
-                <span
-                  key={day}
-                  data-level={
-                    ms === 0
-                      ? 0
-                      : ms < 600000
-                        ? 1
-                        : ms < 1800000
-                          ? 2
-                          : ms < 3600000
-                            ? 3
-                            : 4
-                  }
-                  title={`${day}: ${duration(ms)}`}
-                />
-              );
-            })}
-          </div>
-        </div>
-        <div className="caption">
-          Светлее — меньше времени · темнее — больше
-        </div>
-        <details>
-          <summary>Дни с чтением</summary>
-          <ul className="statistics-days">
-            {calendar
-              .filter((d) => (summary.days.get(d) ?? 0) > 0)
-              .map((d) => (
-                <li key={d}>
-                  <time dateTime={d}>{d}</time>
-                  <span>{duration(summary.days.get(d) ?? 0)}</span>
-                </li>
-              ))}
-          </ul>
-          {!calendar.some((d) => summary.days.has(d)) && (
-            <p>В этом году активных сессий пока нет.</p>
-          )}
-        </details>
-      </section>
-      <section className="statistics-section">
-        <h2>Как вы читаете</h2>
-        <p>
-          Средняя скорость за {year}:{' '}
-          {summary.averageWpm === null
-            ? 'пока не определена'
-            : `${String(Math.round(summary.averageWpm))} слов/мин`}
-        </p>
-        <div className="statistics-modes">
-          {summary.modes.map((m) => (
-            <article key={m.mode}>
-              <h3>{modeLabels[m.mode]}</h3>
-              <p className="statistics-number">{duration(m.milliseconds)}</p>
-              <p>{m.words.toLocaleString('ru')} пройденных слов</p>
-              <p className="caption">
-                {m.wpm === null
-                  ? 'Скорость пока не определена'
-                  : `${String(Math.round(m.wpm))} слов/мин · по активному времени`}
-              </p>
-            </article>
-          ))}
-        </div>
-        <p className="caption">
-          В обычном режиме слова учитываются по кнопке «Фрагмент прочитан» после
-          времени на чтение. В RSVP и Guided — после показа слова. Переходы и
-          пропуски не засчитываются. Скорость учитывает повторные проходы;
-          уникальный объём — объединение интервалов одного содержимого без
-          повторов.
-        </p>
-        {summary.legacySeconds > 0 && (
-          <p className="caption">
-            Ранее сохранённое время: {duration(summary.legacySeconds * 1000)}.
-            Режим и распределение по дням неизвестны; в календарь оно не
-            включено.
-          </p>
-        )}
-      </section>
-      <div className="statistics-columns">
-        {(['genres', 'authors'] as const).map((field) => (
-          <section className="statistics-section" key={field}>
-            <h2>{field === 'genres' ? 'Жанры' : 'Авторы'}</h2>
+      <details className="statistics-details">
+        <summary>Подробная статистика</summary>
+        <div className="statistics-page">
+          <section className="statistics-section">
+            <h2>Время с книгами</h2>
+            {data.readings.length > 0 && (
+              <dl className="statistics-facts">
+                <div>
+                  <dt>Сегодня</dt>
+                  <dd>{duration(summary.dayTime)}</dd>
+                </div>
+                <div>
+                  <dt>Эта неделя</dt>
+                  <dd>{duration(summary.weekTime)}</dd>
+                </div>
+                <div>
+                  <dt>Этот месяц</dt>
+                  <dd>{duration(summary.monthTime)}</dd>
+                </div>
+                <div>
+                  <dt>{year} год</dt>
+                  <dd>{duration(summary.yearTime)}</dd>
+                </div>
+              </dl>
+            )}
             <p className="caption">
-              Прочитанные книги за {year}. Одна книга может входить в несколько
-              групп.
+              Активное время, без фонового воспроизведения и пауз. Неделя
+              начинается в понедельник. Часовой пояс: {zone}.
             </p>
-            {summary[field].length === 0 ? (
-              <p className="caption">Пока нет данных.</p>
-            ) : (
-              <ul className="statistics-bars">
-                {summary[field].map(([label, count]) => (
-                  <li key={label}>
-                    <div>
-                      <span>{label}</span>
-                      <strong>{count}</strong>
-                    </div>
-                    <meter
-                      min={0}
-                      max={summary.booksYear || 1}
-                      value={count}
-                      aria-label={`${label}: ${String(count)}`}
-                    />
-                  </li>
+          </section>
+          <section className="statistics-section">
+            <h2>Ритм чтения</h2>
+            <p className="caption">
+              {year} · от января к декабрю, строки — понедельник–воскресенье.
+            </p>
+            <div
+              className="activity-scroll"
+              tabIndex={0}
+              role="region"
+              aria-label="Календарь активности; подробности доступны в списке дней"
+            >
+              <div className="activity-calendar" aria-hidden="true">
+                {Array.from({ length: offset }, (_, i) => (
+                  <span key={`gap-${String(i)}`} />
                 ))}
+                {calendar.map((day) => {
+                  const ms = summary.days.get(day) ?? 0;
+                  return (
+                    <span
+                      key={day}
+                      data-level={
+                        ms === 0
+                          ? 0
+                          : ms < 600000
+                            ? 1
+                            : ms < 1800000
+                              ? 2
+                              : ms < 3600000
+                                ? 3
+                                : 4
+                      }
+                      title={`${day}: ${duration(ms)}`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+            <div className="caption">
+              Светлее — меньше времени · темнее — больше
+            </div>
+            <details>
+              <summary>Дни с чтением</summary>
+              <ul className="statistics-days">
+                {calendar
+                  .filter((d) => (summary.days.get(d) ?? 0) > 0)
+                  .map((d) => (
+                    <li key={d}>
+                      <time dateTime={d}>{d}</time>
+                      <span>{duration(summary.days.get(d) ?? 0)}</span>
+                    </li>
+                  ))}
               </ul>
+              {!calendar.some((d) => summary.days.has(d)) && (
+                <p>В этом году активных сессий пока нет.</p>
+              )}
+            </details>
+          </section>
+          <section className="statistics-section">
+            <h2>Как вы читаете</h2>
+            <p>
+              Средняя скорость за {year}:{' '}
+              {summary.averageWpm === null
+                ? 'пока не определена'
+                : `${String(Math.round(summary.averageWpm))} слов/мин`}
+            </p>
+            <div className="statistics-modes">
+              {summary.modes.map((m) => (
+                <article key={m.mode}>
+                  <h3>{modeLabels[m.mode]}</h3>
+                  <p className="statistics-number">
+                    {duration(m.milliseconds)}
+                  </p>
+                  <p>{m.words.toLocaleString('ru')} пройденных слов</p>
+                  <p className="caption">
+                    {m.wpm === null
+                      ? 'Скорость пока не определена'
+                      : `${String(Math.round(m.wpm))} слов/мин · по активному времени`}
+                  </p>
+                </article>
+              ))}
+            </div>
+            <p className="caption">
+              В обычном режиме слова учитываются по кнопке «Фрагмент прочитан»
+              после времени на чтение. В RSVP и Guided — после показа слова.
+              Переходы и пропуски не засчитываются. Скорость учитывает повторные
+              проходы; уникальный объём — объединение интервалов одного
+              содержимого без повторов.
+            </p>
+            {summary.legacySeconds > 0 && (
+              <p className="caption">
+                Ранее сохранённое время:{' '}
+                {duration(summary.legacySeconds * 1000)}. Режим и распределение
+                по дням неизвестны; в календарь оно не включено.
+              </p>
             )}
           </section>
-        ))}
-      </div>
-      <section className="statistics-section">
-        <h2>Сейчас с вами</h2>
-        {current.length === 0 && (
-          <p className="caption">Здесь появятся текущие прочтения.</p>
-        )}
-        {current.map((r) => {
-          const position = data.positions
-            .filter((p) => p.readingId === r.id)
-            .sort((a, b) => b.updatedAt - a.updatedAt)[0];
-          return (
-            <article className="statistics-reading" key={r.id}>
-              <h3>{bookTitle(r.bookId)}</h3>
-              <p className="caption">
-                {statusLabels[r.status]} · позиция{' '}
-                {position
-                  ? `${String(Math.round(position.progression * 100))}%`
-                  : 'не сохранена'}
-              </p>
-              {position && (
-                <progress
-                  aria-label={`Позиция: ${bookTitle(r.bookId)}`}
-                  max={1}
-                  value={position.progression}
-                />
-              )}
-              <p className="caption">
-                Позиция в тексте, не доля подтверждённых прочитанных слов.
-              </p>
-            </article>
-          );
-        })}
-      </section>
-      <section className="statistics-section">
-        <h2>Прочитано в {year}</h2>
-        {summary.yearly.length === 0 ? (
-          <p className="caption">
-            Завершённых прочтений пока нет. Бумажную книгу тоже можно добавить и
-            указать дату.
-          </p>
-        ) : (
-          summary.yearly
-            .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0))
-            .map((r) => (
+          <div className="statistics-columns">
+            {(['genres', 'authors'] as const).map((field) => (
+              <section className="statistics-section" key={field}>
+                <h2>{field === 'genres' ? 'Жанры' : 'Авторы'}</h2>
+                <p className="caption">
+                  Прочитанные книги за {year}. Одна книга может входить в
+                  несколько групп.
+                </p>
+                {summary[field].length === 0 ? (
+                  <p className="caption">Пока нет данных.</p>
+                ) : (
+                  <ul className="statistics-bars">
+                    {summary[field].map(([label, count]) => (
+                      <li key={label}>
+                        <div>
+                          <span>{label}</span>
+                          <strong>{count}</strong>
+                        </div>
+                        <meter
+                          min={0}
+                          max={summary.booksYear || 1}
+                          value={count}
+                          aria-label={`${label}: ${String(count)}`}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            ))}
+          </div>
+        </div>
+      </details>
+      {current.length > 0 && (
+        <section className="statistics-section">
+          <h2>Сейчас с вами</h2>
+          {current.length === 0 && (
+            <p className="caption">Здесь появятся текущие прочтения.</p>
+          )}
+          {current.map((r) => {
+            const position = data.positions
+              .filter((p) => p.readingId === r.id)
+              .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+            return (
               <article className="statistics-reading" key={r.id}>
                 <h3>{bookTitle(r.bookId)}</h3>
-                <p>
-                  {dateInput(r.finishedAt)} ·{' '}
-                  {r.rating === null ? 'Без оценки' : `${String(r.rating)} / 5`}
+                <p className="caption">
+                  {statusLabels[r.status]} · позиция{' '}
+                  {position
+                    ? `${String(Math.round(position.progression * 100))}%`
+                    : 'не сохранена'}
                 </p>
-                {r.review && <p className="statistics-prose">{r.review}</p>}
-                <Button
-                  variant="quiet"
-                  onClick={() => {
-                    setReading(r);
-                  }}
-                >
-                  Изменить прочтение
-                </Button>
+                {position && (
+                  <progress
+                    aria-label={`Позиция: ${bookTitle(r.bookId)}`}
+                    max={1}
+                    value={position.progression}
+                  />
+                )}
+                <p className="caption">
+                  Позиция в тексте, не доля подтверждённых прочитанных слов.
+                </p>
               </article>
-            ))
-        )}
-      </section>
-      <section className="statistics-section">
-        <h2>История прочтений</h2>
-        {data.readings.length === 0 && (
-          <p className="caption">Добавьте первую книгу в библиотеку.</p>
-        )}
-        {[...data.readings]
-          .sort((a, b) => b.createdAt - a.createdAt)
-          .map((r) => {
-            const events = data.activities.filter((a) => a.readingId === r.id);
-            const groups = new Map<string, typeof events>();
-            for (const event of events) {
-              const key = `${event.contentId}:${String(event.textVersion)}`;
-              const group = groups.get(key) ?? [];
-              group.push(event);
-              groups.set(key, group);
-            }
-            const unique = [...groups.values()].reduce(
-              (n, es) => n + intervalWords(es.flatMap((e) => e.intervals)),
-              0,
             );
-            return (
-              <details className="statistics-reading" key={r.id}>
-                <summary>
-                  {bookTitle(r.bookId)} · {statusLabels[r.status]}
-                </summary>
-                <p>
-                  {dateInput(r.startedAt) || 'Начало не указано'} —{' '}
-                  {dateInput(r.finishedAt) || 'не завершено'}
-                </p>
-                <p>
-                  {r.rating === null
-                    ? 'Без оценки'
-                    : `Оценка ${String(r.rating)} / 5`}
-                </p>
-                {r.review && <p className="statistics-prose">{r.review}</p>}
-                <p>
-                  {unique.toLocaleString('ru')} уникальных слов в этом прочтении
-                </p>
-                {(['ordinary', 'rsvp', 'guided'] as const).map((m) => (
-                  <p className="caption" key={m}>
-                    {modeLabels[m]}:{' '}
-                    {duration(
-                      events
-                        .filter((e) => e.mode === m)
-                        .reduce((n, e) => n + e.milliseconds, 0),
-                    )}
+          })}
+        </section>
+      )}
+      {summary.yearly.length > 0 && (
+        <section className="statistics-section">
+          <h2>Прочитано в {year}</h2>
+          {summary.yearly.length === 0 ? (
+            <p className="caption">
+              Завершённых прочтений пока нет. Бумажную книгу тоже можно добавить
+              и указать дату.
+            </p>
+          ) : (
+            summary.yearly
+              .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0))
+              .map((r) => (
+                <article className="statistics-reading" key={r.id}>
+                  <h3>{bookTitle(r.bookId)}</h3>
+                  <p>
+                    {dateInput(r.finishedAt)} ·{' '}
+                    {r.rating === null
+                      ? 'Без оценки'
+                      : `${String(r.rating)} / 5`}
                   </p>
-                ))}
-                <div className="statistics-actions">
+                  {r.review && <p className="statistics-prose">{r.review}</p>}
                   <Button
                     variant="quiet"
                     onClick={() => {
@@ -519,22 +474,89 @@ export function StatisticsPage({ store }: { store: LocalStore }) {
                   >
                     Изменить прочтение
                   </Button>
-                  <Button
-                    variant="quiet"
-                    disabled={busy}
-                    onClick={() => {
-                      void run(async () => {
-                        setReading(await store.addReading(r.bookId));
-                      });
-                    }}
-                  >
-                    Новое прочтение
-                  </Button>
-                </div>
-              </details>
-            );
-          })}
-      </section>
+                </article>
+              ))
+          )}
+        </section>
+      )}
+      {data.readings.length > 0 && (
+        <section className="statistics-section">
+          <h2>История прочтений</h2>
+          {data.readings.length === 0 && (
+            <p className="caption">Добавьте первую книгу в библиотеку.</p>
+          )}
+          {[...data.readings]
+            .sort((a, b) => b.createdAt - a.createdAt)
+            .map((r) => {
+              const events = data.activities.filter(
+                (a) => a.readingId === r.id,
+              );
+              const groups = new Map<string, typeof events>();
+              for (const event of events) {
+                const key = `${event.contentId}:${String(event.textVersion)}`;
+                const group = groups.get(key) ?? [];
+                group.push(event);
+                groups.set(key, group);
+              }
+              const unique = [...groups.values()].reduce(
+                (n, es) => n + intervalWords(es.flatMap((e) => e.intervals)),
+                0,
+              );
+              return (
+                <details className="statistics-reading" key={r.id}>
+                  <summary>
+                    {bookTitle(r.bookId)} · {statusLabels[r.status]}
+                  </summary>
+                  <p>
+                    {dateInput(r.startedAt) || 'Начало не указано'} —{' '}
+                    {dateInput(r.finishedAt) || 'не завершено'}
+                  </p>
+                  <p>
+                    {r.rating === null
+                      ? 'Без оценки'
+                      : `Оценка ${String(r.rating)} / 5`}
+                  </p>
+                  {r.review && <p className="statistics-prose">{r.review}</p>}
+                  <p>
+                    {unique.toLocaleString('ru')} уникальных слов в этом
+                    прочтении
+                  </p>
+                  {(['ordinary', 'rsvp', 'guided'] as const).map((m) => (
+                    <p className="caption" key={m}>
+                      {modeLabels[m]}:{' '}
+                      {duration(
+                        events
+                          .filter((e) => e.mode === m)
+                          .reduce((n, e) => n + e.milliseconds, 0),
+                      )}
+                    </p>
+                  ))}
+                  <div className="statistics-actions">
+                    <Button
+                      variant="quiet"
+                      onClick={() => {
+                        setReading(r);
+                      }}
+                    >
+                      Изменить прочтение
+                    </Button>
+                    <Button
+                      variant="quiet"
+                      disabled={busy}
+                      onClick={() => {
+                        void run(async () => {
+                          setReading(await store.addReading(r.bookId));
+                        });
+                      }}
+                    >
+                      Новое прочтение
+                    </Button>
+                  </div>
+                </details>
+              );
+            })}
+        </section>
+      )}
       <section className="statistics-section">
         <div className="statistics-toolbar">
           <h2>Книжный дневник</h2>

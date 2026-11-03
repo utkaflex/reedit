@@ -215,13 +215,12 @@ test('аннотации остаются после удаления файла
     .getByRole('list', { name: 'Книги библиотеки' })
     .getByRole('button', { name: /Книга с цитатами/ })
     .click();
+  await page.getByText('Файлы и издания', { exact: true }).click();
   await page.getByRole('button', { name: 'Убрать файл', exact: true }).click();
   await page
     .getByRole('button', { name: 'Убрать только файл', exact: true })
     .click();
-  await page
-    .getByRole('link', { name: 'Цитаты, заметки и закладки книги' })
-    .click();
+  await page.getByRole('link', { name: 'Цитаты и заметки' }).click();
   await expect(page.locator('.saved-fragment')).toHaveCount(1);
   await expect(
     page.getByRole('button', { name: 'К месту в книге' }),
@@ -246,9 +245,7 @@ test('аннотации остаются после удаления файла
   await page
     .getByRole('button', { name: 'Прикрепить EPUB', exact: true })
     .click();
-  await page
-    .getByRole('link', { name: 'Цитаты, заметки и закладки книги' })
-    .click();
+  await page.getByRole('link', { name: 'Цитаты и заметки' }).click();
   await expect(
     page.getByRole('button', { name: 'К месту в книге' }),
   ).toBeEnabled();

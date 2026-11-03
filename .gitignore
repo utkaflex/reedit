@@ -13,3 +13,4 @@ playwright-report/
 *.fb2
 *.zip
 !tests/fixtures/epubs/*.epub
+*.local.spec.ts

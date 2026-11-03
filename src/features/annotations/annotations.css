@@ -3,6 +3,21 @@
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
   gap: 16px;
 }
+.notes-filters > *,
+.saved-notes {
+  min-width: 0;
+  max-width: 100%;
+}
+.notes-filters input[type='date'] {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 44px;
+}
+@media (max-width: 600px) {
+  .notes-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .notes-list {
   list-style: none;
   margin: 0;

@@ -83,6 +83,7 @@ export interface ReaderSession {
   destroy(): void;
 }
 export interface ReaderOpenOptions {
+  onProgress?: (message: string) => void;
   onInteraction?: () => void;
   host: HTMLElement;
   file: BookFile;

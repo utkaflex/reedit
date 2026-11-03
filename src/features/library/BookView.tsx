@@ -13,6 +13,7 @@ import { Dialog } from '../../ui/Dialog';
 import { Button } from '../../ui/Button';
 import { formatCount } from '../../ui/format';
 import { SelectField } from '../../ui/FormControls';
+import { onlineBookCover } from '../../services/catalog';
 
 export function LibraryCard({
   book,
@@ -26,6 +27,7 @@ export function LibraryCard({
   list: boolean;
 }) {
   const url = useBlobUrl(book.cover);
+  const cardCover = book.cover ? url : onlineBookCover(book);
   return (
     <li
       data-book-id={book.id}
@@ -34,7 +36,7 @@ export function LibraryCard({
       <BookCard
         title={book.title}
         authors={book.authors}
-        {...(url ? { coverUrl: url } : {})}
+        {...(cardCover ? { coverUrl: cardCover } : {})}
         onOpen={onOpen}
       />
       <p className="book-status">
@@ -74,6 +76,8 @@ export function BookView({
   error: string | null;
 }) {
   const url = useBlobUrl(book.cover);
+  const preview = book.cover ? url : onlineBookCover(book);
+  const [failedPreview, setFailedPreview] = useState<string | null>(null);
   const history = readings
     .filter((reading) => reading.bookId === book.id)
     .sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id));
@@ -90,52 +94,88 @@ export function BookView({
       }}
     >
       <div className="form-stack book-detail">
-        {url && (
-          <img
-            className="cover-preview"
-            src={url}
-            alt={`Обложка «${book.title}»`}
-          />
+        <div className="book-detail-hero">
+          {preview && preview !== failedPreview && (
+            <img
+              className="cover-preview"
+              src={preview}
+              onError={() => {
+                setFailedPreview(preview);
+              }}
+              alt={`Обложка «${book.title}»`}
+            />
+          )}
+          <p>{book.authors.join(', ') || 'Автор не указан'}</p>
+        </div>
+        {!book.cover && preview && preview !== failedPreview && (
+          <p className="caption">
+            Обложка:{' '}
+            <a
+              href={`https://books.google.com/books?id=${encodeURIComponent(book.catalogIds.find((item) => item.source === 'google-books')?.value ?? '')}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Google Books
+            </a>{' '}
+            · доступна онлайн
+          </p>
         )}
-        <p>{book.authors.join(', ') || 'Автор не указан'}</p>
+        {attached[0]?.sha256 && (
+          <Button
+            aria-label={`Читать файл ${attached[0].name}`}
+            disabled={busy}
+            onClick={() => {
+              const file = attached[0];
+              if (file) onRead(file.id, currentReading?.id);
+            }}
+          >
+            Читать
+          </Button>
+        )}
         <a
           className="button button--secondary"
           href={`#/quotes?book=${book.id}`}
         >
-          Цитаты, заметки и закладки книги
+          Цитаты и заметки
         </a>
-        {book.description && (
-          <p className="preserve-text">{book.description}</p>
-        )}
-        {book.genres.length > 0 && (
-          <p className="caption">Жанры: {book.genres.join(', ')}</p>
-        )}
-        {book.isbn.length > 0 && (
-          <p className="caption">ISBN: {book.isbn.join(', ')}</p>
-        )}
-        {book.language && <p className="caption">Язык: {book.language}</p>}
-        {(book.publisher || book.publishedDate) && (
-          <p className="caption">
-            {book.publisher} · {book.publishedDate}
-          </p>
-        )}
-        {book.catalogIds.map((ref) => (
-          <p className="caption" key={`${ref.source}:${ref.value}`}>
-            <a
-              href={
-                ref.source === 'google-books'
-                  ? `https://books.google.com/books?id=${encodeURIComponent(ref.value)}`
-                  : `https://openlibrary.org/books/${encodeURIComponent(ref.value)}`
-              }
-              target="_blank"
-              rel="noreferrer"
-            >
-              {ref.source === 'google-books' ? 'Google Books' : 'Open Library'}{' '}
-              · {ref.value}
-            </a>
-          </p>
-        ))}
-        <Button variant="secondary" disabled={busy} onClick={onEdit}>
+        <details className="book-disclosure">
+          <summary>О книге</summary>
+          <div className="form-stack">
+            {book.description && (
+              <p className="preserve-text">{book.description}</p>
+            )}
+            {book.genres.length > 0 && (
+              <p className="caption">Жанры: {book.genres.join(', ')}</p>
+            )}
+            {book.isbn.length > 0 && (
+              <p className="caption">ISBN: {book.isbn.join(', ')}</p>
+            )}
+            {book.language && <p className="caption">Язык: {book.language}</p>}
+            {(book.publisher || book.publishedDate) && (
+              <p className="caption">
+                {book.publisher} · {book.publishedDate}
+              </p>
+            )}
+            {book.catalogIds.map((ref) => (
+              <p className="caption" key={`${ref.source}:${ref.value}`}>
+                <a
+                  href={
+                    ref.source === 'google-books'
+                      ? `https://books.google.com/books?id=${encodeURIComponent(ref.value)}`
+                      : `https://openlibrary.org/books/${encodeURIComponent(ref.value)}`
+                  }
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {ref.source === 'google-books'
+                    ? 'Google Books'
+                    : 'Open Library'}{' '}
+                </a>
+              </p>
+            ))}
+          </div>
+        </details>
+        <Button variant="quiet" disabled={busy} onClick={onEdit}>
           Редактировать книгу
         </Button>
         <section className="form-stack" aria-label="История чтения">
@@ -189,89 +229,91 @@ export function BookView({
           <Button disabled={busy} onClick={onReread}>
             Добавить прочтение
           </Button>
-          <p className="caption">
-            Будет создано отдельное прочтение. Прежние оценки, отзывы и даты
-            сохранятся.
-          </p>
         </section>
-        <section className="form-stack" aria-label="Локальные файлы">
-          <h3>Файлы книги</h3>
-          {attached.some((file) => file.sha256) && (
-            <SelectField
-              label="Прочтение для чтения"
-              value={currentReading?.id ?? ''}
-              onChange={(event) => {
-                setSelectedReading(
-                  event.target.value ? id(event.target.value) : null,
-                );
+        <details
+          className="book-disclosure"
+          open={attached.length === 0 ? true : undefined}
+        >
+          <summary>Файлы и издания</summary>
+          <section className="form-stack" aria-label="Локальные файлы">
+            {history.length > 1 && attached.some((file) => file.sha256) && (
+              <SelectField
+                label="Прочтение для чтения"
+                value={currentReading?.id ?? ''}
+                onChange={(event) => {
+                  setSelectedReading(
+                    event.target.value ? id(event.target.value) : null,
+                  );
+                }}
+              >
+                {history.length === 0 && (
+                  <option value="">Первое прочтение</option>
+                )}
+                {history.map((reading, number) => (
+                  <option key={reading.id} value={reading.id}>
+                    Прочтение {history.length - number} ·{' '}
+                    {statusLabels[reading.status]}
+                  </option>
+                ))}
+              </SelectField>
+            )}
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={() => {
+                onImport('epub');
               }}
             >
-              {history.length === 0 && (
-                <option value="">Первое прочтение</option>
-              )}
-              {history.map((reading, number) => (
-                <option key={reading.id} value={reading.id}>
-                  Прочтение {history.length - number} ·{' '}
-                  {statusLabels[reading.status]}
-                </option>
-              ))}
-            </SelectField>
-          )}
-          <Button
-            variant="secondary"
-            disabled={busy}
-            onClick={() => {
-              onImport('epub');
-            }}
-          >
-            Прикрепить EPUB
-          </Button>
-          <Button
-            variant="secondary"
-            disabled={busy}
-            onClick={() => {
-              onImport('fb2');
-            }}
-          >
-            Прикрепить FB2
-          </Button>
-          {attached.length === 0 ? (
-            <p className="caption">
-              Файл книги не прикреплён. Книга полноценно хранится в библиотеке
-              без файла. Можно прикрепить EPUB или FB2 к этой записи.
-            </p>
-          ) : (
-            attached.map((file) => (
-              <div className="file-row" key={file.id}>
-                <span>{file.name}</span>
-                {file.sha256 ? (
+              Прикрепить EPUB
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={() => {
+                onImport('fb2');
+              }}
+            >
+              Прикрепить FB2
+            </Button>
+            {attached.length === 0 ? (
+              <p className="caption">
+                Файл книги не прикреплён. Книга полноценно хранится в библиотеке
+                без файла. Можно прикрепить EPUB или FB2 к этой записи.
+              </p>
+            ) : (
+              attached.map((file, number) => (
+                <div className="file-row" key={file.id}>
+                  <span>{file.name}</span>
+                  {file.sha256 && number > 0 ? (
+                    <Button
+                      aria-label={`Читать файл ${file.name}`}
+                      disabled={busy}
+                      onClick={() => {
+                        onRead(file.id, currentReading?.id);
+                      }}
+                    >
+                      Читать это издание
+                    </Button>
+                  ) : !file.sha256 ? (
+                    <p className="caption">
+                      Повторно импортируйте этот файл, чтобы подготовить
+                      проверенный индекс для чтения.
+                    </p>
+                  ) : null}
                   <Button
+                    variant="secondary"
                     disabled={busy}
                     onClick={() => {
-                      onRead(file.id, currentReading?.id);
+                      onRemoveFile(file.id);
                     }}
                   >
-                    Читать файл {file.name}
+                    Убрать файл
                   </Button>
-                ) : (
-                  <p className="caption">
-                    Повторно импортируйте этот файл, чтобы подготовить
-                    проверенный индекс для чтения.
-                  </p>
-                )}
-                <Button
-                  variant="secondary"
-                  disabled={busy}
-                  onClick={() => {
-                    onRemoveFile(file.id);
-                  }}
-                >
-                  Убрать файл
-                </Button>
-              </div>
-            ))
-          )}
-        </section>
+                </div>
+              ))
+            )}
+          </section>
+        </details>
         {error && (
           <p role="alert" className="error-text">
             {error}

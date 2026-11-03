@@ -272,6 +272,7 @@ export class EpubJsAdapter implements EpubAdapter {
         (link) =>
           link.from !== packagePath && link.from !== 'META-INF/container.xml',
       );
+      let missingFragments = 0;
       for (const link of contentLinks) {
         required(link.path);
         if (!paths.has(link.path))
@@ -289,10 +290,7 @@ export class EpubJsAdapter implements EpubAdapter {
                 node.getAttribute('name') === link.fragment,
             )
           )
-            throw new EpubImportError(
-              'resource',
-              `Не найден фрагмент #${link.fragment} в ${link.path}.`,
-            );
+            missingFragments++;
         }
       }
       const navPath = packaging.navPath || packaging.ncxPath;
@@ -379,6 +377,10 @@ export class EpubJsAdapter implements EpubAdapter {
           'Название отсутствует или метаданные EPUB слишком велики.',
         );
       const warnings: string[] = [];
+      if (missingFragments)
+        warnings.push(
+          `В книге есть внутренние ссылки без точки перехода (${String(missingFragments)}). Весь текст сохранён; отдельные ссылки могут не открываться.`,
+        );
       let cover: Blob | null = null;
       if (packaging.coverPath) {
         const path = resolveReference(packagePath, packaging.coverPath).path;

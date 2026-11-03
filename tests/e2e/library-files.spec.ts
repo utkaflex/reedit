@@ -66,6 +66,7 @@ test('удаление файла сохраняет книгу; редакти�
     .getByRole('list', { name: 'Книги библиотеки' })
     .getByRole('button', { name: 'Тест удаления файла' })
     .click();
+  await page.getByText('Файлы и издания', { exact: true }).click();
   await page.getByRole('button', { name: 'Убрать файл', exact: true }).click();
   await expect(
     page.getByRole('dialog', { name: 'Убрать файл EPUB?', exact: true }),

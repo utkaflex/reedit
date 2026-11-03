@@ -94,6 +94,7 @@ export interface LocalStore {
       newBook?: Book;
       initialReading?: Reading;
       allowDuplicateBook: boolean;
+      coverIfMissing?: Blob;
     },
     signal: AbortSignal,
   ): Promise<{ bookId: Id; fileId: Id; duplicate: boolean }>;

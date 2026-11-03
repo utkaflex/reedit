@@ -102,6 +102,7 @@ test('книга, локальная обложка, отзыв, оценка и
   await books
     .getByRole('button', { name: /Тестовая книга с обложкой/ })
     .click();
+  await page.getByText('О книге', { exact: true }).click();
   await expect(
     page.getByText('Сохранённое описание', { exact: true }),
   ).toBeVisible();

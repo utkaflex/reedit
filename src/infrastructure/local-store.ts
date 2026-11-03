@@ -814,6 +814,18 @@ export function createLocalStore(db = new ReeditDatabase()): LocalStore {
           await repository('epubIndexes').save(input.index, {
             expectedUpdatedAt: null,
           });
+          if (input.coverIfMissing && !input.newBook) {
+            const book = await db.records('books').get(input.file.bookId);
+            if (book && !book.cover)
+              await repository('books').save(
+                {
+                  ...book,
+                  cover: input.coverIfMissing,
+                  updatedAt: Math.max(Date.now(), book.updatedAt + 1),
+                },
+                { expectedUpdatedAt: book.updatedAt },
+              );
+          }
           // Reattach only the same original AND the same rendered representation, within this Book.
           for (const name of ['annotations', 'bookmarks'] as const) {
             await db

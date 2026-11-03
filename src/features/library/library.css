@@ -242,6 +242,56 @@ input[type='file']::file-selector-button {
 .book-detail .button {
   width: 100%;
 }
+.book-detail-hero {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+.book-detail-hero .cover-preview {
+  width: 5.5rem;
+  flex: none;
+}
+.book-detail-hero p {
+  margin: 0;
+  color: var(--color-muted);
+}
+.book-disclosure {
+  border-top: 1px solid var(--color-border);
+  padding-block: var(--space-3);
+  min-width: 0;
+}
+.book-disclosure summary {
+  cursor: pointer;
+  min-height: var(--touch-target);
+  display: list-item;
+  align-content: center;
+  font-weight: 550;
+}
+.book-disclosure[open] > :last-child {
+  margin-top: var(--space-4);
+}
+.book-detail .reading-entry {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  gap: var(--space-2);
+}
+.book-detail .reading-entry p {
+  margin: 0;
+}
+.book-detail .reading-entry h4 {
+  font-size: var(--text-base);
+}
+.book-detail .reading-entry .button {
+  background: transparent;
+  justify-content: start;
+  padding-inline: 0;
+}
+.book-detail .button--danger {
+  background: transparent;
+  border: 0;
+  font-size: var(--text-sm);
+}
 [hidden] {
   display: none !important;
 }
@@ -251,10 +301,19 @@ input[type='file']::file-selector-button {
   }
   .library-actions .action-row {
     width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
   }
   .library-actions .button {
-    flex: 1;
     padding-inline: var(--space-3);
+    overflow-wrap: normal;
+    word-break: normal;
+    min-width: 0;
+    font-size: var(--text-sm);
+  }
+  .library-actions .button:last-child {
+    grid-column: 1 / -1;
   }
   .book-grid {
     gap: var(--space-6) var(--space-4);

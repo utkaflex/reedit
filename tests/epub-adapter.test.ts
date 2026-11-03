@@ -113,6 +113,44 @@ it('иллюстрация и встроенная обложка остаютс
     true,
   );
 });
+it('принимает обычные объявления кодировки Calibre, сохраняя весь текст и оригинал', async () => {
+  const { fixture, result } = await analyze({
+    chapters: [
+      {
+        name: 'titlepage.xhtml',
+        text: 'Начало книги. Русский текст — ё.',
+        markup:
+          '<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/><p>Начало книги. Русский текст — ё.</p>',
+      },
+    ],
+  });
+  expect(result.sections.map((section) => section.text)).toEqual(
+    fixture.expected,
+  );
+  expect(new Uint8Array(await result.original.arrayBuffer())).toEqual(
+    fixture.bytes,
+  );
+});
+it('отсутствующий якорь внутренней ссылки даёт предупреждение, но не теряет книгу', async () => {
+  const { result, fixture } = await analyze({
+    chapters: [
+      {
+        name: 'part.xhtml',
+        text: 'Полный текст книги. Примечание.',
+        markup: '<p>Полный текст книги. <a href="#missing">Примечание.</a></p>',
+      },
+    ],
+  });
+  expect(result.sections.map((section) => section.text)).toEqual(
+    fixture.expected,
+  );
+  expect(
+    result.warnings.some((warning) => warning.includes('внутренние ссылки')),
+  ).toBe(true);
+  expect(new Uint8Array(await result.original.arrayBuffer())).toEqual(
+    fixture.bytes,
+  );
+});
 it.each([
   { missingChapter: 0 },
   { brokenLink: true },
@@ -121,6 +159,15 @@ it.each([
   { unsafeMarkup: '<img src="cover.png" onerror="alert(1)"/>' },
   { unsafeMarkup: '<a href="java&#x73;cript:alert(1)">ссылка</a>' },
   { unsafeMarkup: '<iframe src="https://example.com"/>' },
+  {
+    unsafeMarkup:
+      '<meta http-equiv="refresh" content="0;url=https://example.com"/>',
+  },
+  {
+    unsafeMarkup:
+      '<meta http-equiv="Content-Type" content="text/html; charset=windows-1251"/>',
+  },
+  { unsafeMarkup: '<meta http-equiv="Set-Cookie" content="session=x"/>' },
   {
     extraFiles: {
       'EPUB/unused.xhtml':
@@ -183,9 +230,11 @@ it('не загружает внешние ресурсы, блокирует CS
   ).rejects.toMatchObject({ code: 'unsafe' });
 });
 it('отсутствующий фрагмент и выход пути за пределы контейнера не игнорируются', async () => {
-  await expect(
-    analyze({ unsafeMarkup: '<a href="part.xhtml#missing">Ссылка</a>' }),
-  ).rejects.toMatchObject({ code: 'resource' });
+  const { result } = await analyze({
+    unsafeMarkup: '<a href="part.xhtml#missing">Ссылка</a>',
+  });
+  expect(result.warnings).toHaveLength(1);
+  expect(result.sections[0]?.text).toContain('Ссылка');
   await expect(
     analyze({ unsafeMarkup: '<img src="../../outside.png"/>' }),
   ).rejects.toMatchObject({ code: 'unsafe' });

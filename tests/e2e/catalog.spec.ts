@@ -314,6 +314,19 @@ test('Google: свой источник и атрибуция, описание 
     source: 'google-books',
     snapshot: null,
   });
+  expect(data.books[0]?.cover).toBe(0);
+  const preview = page.getByRole('img', {
+    name: 'Обложка «Crime and Punishment»',
+    exact: true,
+  });
+  await expect(preview).toHaveAttribute('src', /\/api\/catalog\/cover/);
+  await expect
+    .poll(() =>
+      preview.evaluate(
+        (image) => image instanceof HTMLImageElement && image.naturalWidth > 0,
+      ),
+    )
+    .toBe(true);
 });
 
 test('устаревший ответ не заменяет новый поиск; отсутствие ключа Google объясняется явно', async ({

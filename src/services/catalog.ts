@@ -9,6 +9,16 @@ import { newId } from '../domain/model';
 import type { LocalStore } from '../domain/repositories';
 import { initialReading, makeBook, type BookDraft } from './library';
 
+/** Online preview from a stored reference, never a permanent copy of Google content. */
+export function onlineBookCover(book: Book): string | undefined {
+  const reference = book.catalogIds.find(
+    (item) => item.source === 'google-books',
+  );
+  if (!reference || !/^[\w-]{1,128}$/.test(reference.value)) return undefined;
+  const image = `https://books.google.com/books/content?${new URLSearchParams({ id: reference.value, printsec: 'frontcover', img: '1', zoom: '1', source: 'gbs_api' })}`;
+  return `/api/catalog/cover?url=${encodeURIComponent(image)}`;
+}
+
 export async function saveCatalogSelection(
   store: LocalStore,
   input: {

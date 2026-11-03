@@ -25,6 +25,7 @@ export async function saveEpub(
     targetBookId: Id | null;
     allowDuplicateBook: boolean;
     title: string;
+    useEmbeddedCover?: boolean;
   },
   signal: AbortSignal,
 ) {
@@ -92,6 +93,11 @@ export async function saveEpub(
       },
       index,
       allowDuplicateBook: options.allowDuplicateBook,
+      ...(options.targetBookId !== null &&
+      options.useEmbeddedCover &&
+      analysis.cover
+        ? { coverIfMissing: analysis.cover }
+        : {}),
       ...(options.targetBookId === null
         ? { newBook, initialReading: initialReading(newBook) }
         : {}),

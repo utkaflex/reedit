@@ -41,6 +41,7 @@ import {
 } from '../../domain/text-position';
 import { ReadingProgressService } from '../../services/reading-progress';
 import { PositionPersistenceService } from '../../services/position-persistence';
+import { operationDeadline } from '../../services/operation-deadline';
 
 const palette = {
   light: { background: '#fffefa', text: '#252a27' },
@@ -137,6 +138,7 @@ class EpubReaderSession implements ReaderSession {
     try {
       const representation = this.options.file.representation;
       const data = representation?.data ?? this.options.file.data;
+      this.options.onProgress?.('Проверяем файл книги…');
       const checked = await this.analyze(
         {
           name: representation ? 'converted.epub' : this.options.file.name,
@@ -145,7 +147,7 @@ class EpubReaderSession implements ReaderSession {
           arrayBuffer: () => data.arrayBuffer(),
         },
         this.options.signal,
-        () => undefined,
+        (message) => this.options.onProgress?.(message),
       );
       if (
         checked.sha256 !==
@@ -164,6 +166,7 @@ class EpubReaderSession implements ReaderSession {
         );
       this.buffer = await checked.original.arrayBuffer();
       this.ensureAlive();
+      this.options.onProgress?.('Открываем содержимое EPUB…');
       await this.createBook();
       if (!this.textIndex) throw new Error('Текстовый индекс не готов.');
       let restored = PositionPersistenceService.restore(
@@ -183,6 +186,7 @@ class EpubReaderSession implements ReaderSession {
       const initialCfi = restored.cursor
         ? await this.cfiForCursor(restored.cursor)
         : restored.cfi;
+      this.options.onProgress?.('Восстанавливаем место и готовим страницу…');
       await this.settle(
         () => this.display(initialCfi ?? undefined),
         initialCfi ?? undefined,
@@ -270,8 +274,18 @@ class EpubReaderSession implements ReaderSession {
     this.book = book;
     this.openingBook = true;
     try {
-      await book.open(this.buffer, 'binary');
-      await book.ready;
+      await operationDeadline(
+        book.open(this.buffer, 'binary'),
+        this.options.signal,
+        15000,
+        'Не удалось открыть содержимое EPUB за 15 секунд. Попробуйте другое издание или повторите открытие. Книга сохранена.',
+      );
+      await operationDeadline(
+        book.ready,
+        this.options.signal,
+        15000,
+        'Не удалось загрузить структуру книги. Файл сохранён; попробуйте повторить открытие.',
+      );
       await book.loaded.resources;
     } finally {
       this.openingBook = false;
@@ -335,6 +349,11 @@ class EpubReaderSession implements ReaderSession {
               : [],
           ),
           this.options.signal,
+          undefined,
+          (completed, total) =>
+            this.options.onProgress?.(
+              `Готовим текст: ${String(completed + 1)} из ${String(total)} разделов…`,
+            ),
         );
         this.ensureAlive();
         this.textIndex = this.options.onDocumentIndex
@@ -1030,9 +1049,27 @@ class EpubReaderSession implements ReaderSession {
     );
     const href = this.book?.spine.get(spineIndex).href;
     if (!href) return Promise.reject(new Error('Не найден адрес раздела EPUB'));
-    return this.command(() =>
-      this.display(`${href}${target.fragment ? `#${target.fragment}` : ''}`),
-    );
+    return this.command(async () => {
+      if (target.fragment) {
+        const doc: unknown = await this.book?.load(
+          this.book.spine.get(spineIndex).url,
+        );
+        if (
+          !isDocument(doc) ||
+          !Array.from(doc.getElementsByTagName('*')).some(
+            (element) =>
+              element.getAttribute('id') === target.fragment ||
+              element.getAttribute('name') === target.fragment,
+          )
+        )
+          throw new Error(
+            'Эта внутренняя ссылка в книге повреждена. Продолжайте чтение или выберите раздел из оглавления.',
+          );
+      }
+      await this.display(
+        `${href}${target.fragment ? `#${target.fragment}` : ''}`,
+      );
+    });
   }
   setPreferences(preferences: ReaderPreferences) {
     if (!validReaderPreferences(preferences))
