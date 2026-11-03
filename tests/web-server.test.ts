@@ -48,6 +48,10 @@ it('serves Russian SPA, health, MIME, immutable assets and revalidated worker', 
     "object-src 'none'",
   );
   expect(page.headers.get('x-content-type-options')).toBe('nosniff');
+  expect(page.headers.get('content-security-policy')).toContain(
+    "frame-ancestors 'self'",
+  );
+  expect(page.headers.get('x-frame-options')).toBe('SAMEORIGIN');
   const worker = await fetch(base + '/sw.js');
   expect(worker.headers.get('cache-control')).toBe('no-cache');
   expect(worker.headers.get('service-worker-allowed')).toBe('/');
