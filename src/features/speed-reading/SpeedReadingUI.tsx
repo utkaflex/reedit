@@ -26,7 +26,10 @@ export function RsvpWord({
     snapshot.preferences.focusLetter && Array.from(snapshot.word).length <= 40;
   return (
     <div className="rsvp-stage" onPointerDown={pause}>
-      <p className="caption">RSVP · {snapshot.preferences.wpm} слов/мин</p>
+      <p className="rsvp-heading">
+        <span>Чтение по словам</span>
+        <span>{snapshot.preferences.wpm} слов/мин</span>
+      </p>
       <output
         className={`rsvp-word ${focus ? 'rsvp-word--focus' : ''}`}
         aria-label="Текущее слово"
@@ -47,7 +50,13 @@ export function RsvpWord({
           snapshot.word || 'Нет слов'
         )}
       </output>
-      <p className="caption">Касание — пауза</p>
+      <p className="caption rsvp-hint">
+        {snapshot.playing
+          ? 'Коснитесь страницы, чтобы остановиться'
+          : snapshot.ended
+            ? 'Вы дошли до конца книги'
+            : 'Продолжите, когда будете готовы'}
+      </p>
     </div>
   );
 }
@@ -104,6 +113,12 @@ export function SpeedControls({
           {snapshot.ordinal} / {snapshot.total}
         </span>
       </div>
+      <progress
+        className="speed-progress"
+        aria-label="Прогресс скорочтения"
+        max={Math.max(1, snapshot.total)}
+        value={snapshot.ordinal}
+      />
       {snapshot.mode === 'guided' && (
         <p className="caption">Guided Reading · коснитесь текста для паузы</p>
       )}
@@ -121,6 +136,8 @@ export function SpeedControls({
           <Icon name="back" />
         </Button>
         <Button
+          className="speed-play"
+          aria-label={snapshot.playing ? 'Пауза' : 'Продолжить'}
           disabled={
             snapshot.preparing ||
             snapshot.ordinal === 0 ||
@@ -132,7 +149,7 @@ export function SpeedControls({
             else run((session) => session.play());
           }}
         >
-          {snapshot.playing ? 'Пауза' : 'Продолжить'}
+          <Icon name={snapshot.playing ? 'pause' : 'play'} />
         </Button>
         <Button
           variant="quiet"
@@ -150,6 +167,8 @@ export function SpeedControls({
         </Button>
         <Button
           variant="quiet"
+          className="speed-repeat"
+          aria-label="Предыдущее предложение"
           disabled={
             snapshot.preparing || snapshot.busy || snapshot.ordinal === 0
           }
@@ -157,7 +176,7 @@ export function SpeedControls({
             run((session) => session.seek('sentence'));
           }}
         >
-          Предыдущее предложение
+          <Icon name="repeat" />
         </Button>
       </div>
       <div className="speed-buttons">
@@ -169,7 +188,7 @@ export function SpeedControls({
           }}
           disabled={snapshot.preparing}
         >
-          {p.wpm} WPM · Настройки
+          <Icon name="settings" /> {p.wpm} WPM · Настройки
         </Button>
         <Button
           variant="secondary"
@@ -177,7 +196,7 @@ export function SpeedControls({
             run((session) => session.stop());
           }}
         >
-          Обычное чтение
+          <Icon name="book" /> Обычное чтение
         </Button>
       </div>
       {snapshot.error && (
@@ -188,6 +207,7 @@ export function SpeedControls({
       {settings && (
         <Dialog
           open
+          presentation="panel"
           title="Настройки скорочтения"
           onClose={() => {
             setSettings(null);

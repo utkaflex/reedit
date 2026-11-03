@@ -398,7 +398,7 @@ export function ReaderScreen({
             setPanel('contents');
           }}
         >
-          <Icon name="library" />
+          <Icon name="contents" />
         </Button>
         <Button
           variant="quiet"
@@ -514,11 +514,14 @@ export function ReaderScreen({
               />
               <Button
                 variant="quiet"
+                className="reader-confirm"
+                aria-label="Фрагмент прочитан"
                 disabled={!activity.canConfirm || busy}
                 onClick={activity.confirm}
                 title="Я прочитал видимый фрагмент. Перелистывания сами по себе не учитывают прочитанные слова."
               >
-                Фрагмент прочитан
+                <Icon name="check" />
+                <span>Прочитано</span>
               </Button>
               <div className="reader-navigation">
                 <Button

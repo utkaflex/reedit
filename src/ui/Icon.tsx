@@ -1,6 +1,10 @@
 import type { ReactNode } from 'react';
 
 const shapes = {
+  play: <path d="m9 5 11 7-11 7V5Z" />,
+  pause: <path d="M8 5v14M16 5v14" />,
+  repeat: <path d="M5 8h10a6 6 0 1 1-5.5 8M5 8l4-4M5 8l4 4" />,
+  contents: <path d="M8 6h12M8 12h12M8 18h12M3 6h.01M3 12h.01M3 18h.01" />,
   quote: <path d="M10 5H4v7h5c0 4-2 6-5 7M21 5h-6v7h5c0 4-2 6-5 7" />,
   bookmark: <path d="M6 3h12v18l-6-4-6 4V3Z" />,
   library: (

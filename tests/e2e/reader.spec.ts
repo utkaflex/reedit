@@ -281,6 +281,7 @@ test('оформление, поворот экрана, прокрутка и �
   await page
     .getByRole('slider', { name: 'Размер шрифта', exact: true })
     .fill('24');
+  await page.getByText('Интервалы и другие настройки', { exact: true }).click();
   await page.getByRole('slider', { name: 'Поля', exact: true }).fill('32');
   await page
     .getByRole('slider', { name: 'Межстрочный интервал', exact: true })

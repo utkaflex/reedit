@@ -60,6 +60,73 @@ async function saved(page: Page) {
     }
   });
 }
+
+test('оформление и пульт чтения помещаются на узком телефоне', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 740 });
+  await open(page, true);
+  const stage = await page.locator('.reader-stage').boundingBox();
+  expect(stage?.height).toBeGreaterThan(500);
+  await page
+    .getByRole('button', { name: 'Оформление чтения', exact: true })
+    .click();
+  await page.getByRole('radio', { name: 'Сепия', exact: true }).check();
+  await expect(page.locator('.reader-preview')).toHaveAttribute(
+    'data-theme',
+    'sepia',
+  );
+  await expect(page.locator('.reader-preview')).toHaveCSS(
+    'background-color',
+    'rgb(241, 229, 205)',
+  );
+  await page.screenshot({
+    path: test.info().outputPath('reader-appearance.png'),
+    scale: 'css',
+  });
+  await page
+    .getByRole('button', { name: 'Применить оформление', exact: true })
+    .click();
+  await expect(page.locator('.reader-screen')).toHaveAttribute(
+    'data-reader-theme',
+    'sepia',
+  );
+  await mode(page, 'RSVP');
+  const controls = page.getByRole('region', {
+    name: 'Управление скорочтением',
+  });
+  await expect(
+    controls.getByRole('button', {
+      name: 'Предыдущее предложение',
+      exact: true,
+    }),
+  ).toBeVisible();
+  const boxes = await controls.getByRole('button').evaluateAll((buttons) =>
+    buttons.map((button) => {
+      const box = button.getBoundingClientRect();
+      return {
+        left: box.left,
+        right: box.right,
+        width: box.width,
+        height: box.height,
+      };
+    }),
+  );
+  for (const box of boxes) {
+    expect(box.left).toBeGreaterThanOrEqual(0);
+    expect(box.right).toBeLessThanOrEqual(320);
+    expect(box.width).toBeGreaterThanOrEqual(44);
+    expect(box.height).toBeGreaterThanOrEqual(44);
+  }
+  await page.screenshot({
+    path: test.info().outputPath('reader-rsvp.png'),
+    scale: 'css',
+  });
+  await page
+    .getByRole('button', { name: 'Обычное чтение', exact: true })
+    .click();
+  await expect(page.locator('.speed-word-highlight').first()).toBeVisible();
+});
 test('RSVP: точная передача, шаги, конец spine, возврат и перезапуск', async ({
   page,
 }) => {

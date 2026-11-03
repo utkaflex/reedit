@@ -30,7 +30,7 @@ export function ReaderContents({
     </ol>
   );
   return (
-    <Dialog open title="Оглавление" onClose={onClose}>
+    <Dialog open presentation="panel" title="Оглавление" onClose={onClose}>
       {list(index.navigation)}
       <details className="reader-all-sections">
         <summary>Все текстовые разделы ({index.sections.length})</summary>

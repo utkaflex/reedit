@@ -10,9 +10,9 @@
 }
 .speed-word-highlight {
   position: absolute;
-  background: #89b79266;
+  background: #89b79255;
   border-bottom: 2px solid #6c956b;
-  border-radius: 2px;
+  border-radius: 3px;
   pointer-events: none;
 }
 .rsvp-stage {
@@ -22,8 +22,18 @@
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   align-items: center;
-  padding: 20px;
+  padding: 16px 24px 24px;
   text-align: center;
+}
+.rsvp-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+.rsvp-heading span:first-child {
+  letter-spacing: 0.02em;
 }
 .rsvp-word {
   max-height: 100%;
@@ -31,9 +41,10 @@
   display: block;
   width: 100%;
   overflow-wrap: anywhere;
-  line-height: 1.6;
-  font-family: var(--font-ui);
+  line-height: 1.5;
+  font-family: var(--font-editorial);
   font-variant-ligatures: none;
+  font-weight: 400;
 }
 .rsvp-word--focus {
   display: grid;
@@ -46,31 +57,95 @@
   text-align: left;
 }
 .rsvp-word strong {
+  position: relative;
   color: var(--color-accent);
-  text-decoration: underline;
-  text-underline-offset: 0.25em;
+  font-weight: 600;
+}
+.rsvp-word strong::after {
+  content: '';
+  position: absolute;
+  bottom: -0.3em;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  transform: translateX(-50%);
+}
+.rsvp-hint {
+  font-size: 12px;
+  color: var(--color-muted);
 }
 .speed-controls {
   display: grid;
-  gap: 4px;
+  gap: 8px;
+  width: min(100%, 480px);
+  margin-inline: auto;
 }
 .speed-status {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  font-size: var(--text-sm);
+  font-size: 11px;
   color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+.speed-progress {
+  appearance: none;
+  width: 100%;
+  height: 2px;
+  border: 0;
+  background: var(--color-subtle);
+  color: var(--color-accent);
+}
+.speed-progress::-webkit-progress-bar {
+  background: var(--color-subtle);
+}
+.speed-progress::-webkit-progress-value {
+  background: var(--color-accent);
+}
+.speed-progress::-moz-progress-bar {
+  background: var(--color-accent);
 }
 .speed-buttons {
-  display: flex;
-  gap: 4px;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
   align-items: center;
-  flex-wrap: wrap;
 }
 .speed-buttons .button {
+  font-size: 12px;
   padding: 8px;
-  font-size: var(--text-sm);
+  gap: 6px;
+}
+.speed-buttons .icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.speed-transport {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  position: relative;
+  min-height: 64px;
+}
+.speed-transport .button {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+}
+.speed-transport .speed-play {
+  width: 56px;
+  height: 56px;
+}
+.speed-play .icon {
+  width: 25px;
+  height: 25px;
+}
+.speed-transport .speed-repeat {
+  position: absolute;
+  left: 0;
 }
 .speed-checkbox {
   display: flex;
@@ -79,20 +154,42 @@
   min-height: 44px;
 }
 .reader-progress-row > .button {
-  font-size: var(--text-xs);
+  font-size: 11px;
   padding: 4px 8px;
+  min-height: 32px;
 }
 .reader-screen[data-speed-active='true'] .reader-top {
   visibility: hidden;
 }
-
-.speed-controls .speed-buttons {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+.reader-screen[data-speed-active='true'] .reader-bottom {
+  padding-block: 12px 8px;
 }
-.speed-controls .speed-transport {
-  grid-template-columns: 44px minmax(0, 1fr) 44px;
+@media (max-height: 500px) {
+  .rsvp-stage {
+    padding-block: 4px;
+  }
+  .rsvp-hint {
+    display: none;
+  }
+  .speed-controls {
+    gap: 2px;
+  }
+  .speed-transport {
+    min-height: 44px;
+  }
+  .speed-transport .speed-play {
+    width: 44px;
+    height: 44px;
+  }
 }
-.speed-transport .button:last-child {
-  grid-column: 1 / -1;
+@media (max-width: 359px) {
+  .rsvp-stage {
+    padding-inline: 16px;
+  }
+  .speed-buttons .button {
+    font-size: 11px;
+  }
+  .speed-buttons:not(.speed-transport) .icon {
+    display: none;
+  }
 }
