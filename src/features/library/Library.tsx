@@ -382,6 +382,11 @@ export function Library({
             void perform(async () => {
               const activeId =
                 readingId ?? (await store.addReading(selectedBook.id)).id;
+              // Remove the native modal backdrop before iOS samples the reader's status-bar tint.
+              for (const dialog of document.querySelectorAll<HTMLDialogElement>(
+                'dialog[open]',
+              ))
+                dialog.close();
               setSelected(null);
               window.location.hash = readerUrl({
                 bookId: selectedBook.id,

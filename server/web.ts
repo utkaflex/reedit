@@ -11,7 +11,7 @@ import { pipeline } from 'node:stream/promises';
 export const securityHeaders = {
   // WebKit inherits this policy into blob XHTML: 'none' blocks our own reader iframe.
   'Content-Security-Policy':
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data: https://books.google.com https://covers.openlibrary.org; font-src 'self' blob: data:; connect-src 'self'; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
+    "default-src 'self'; script-src 'self'; style-src 'self' blob: 'unsafe-inline'; img-src 'self' blob: data: https://books.google.com https://covers.openlibrary.org; font-src 'self' blob: data:; connect-src 'self'; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'SAMEORIGIN',
   'Referrer-Policy': 'no-referrer',

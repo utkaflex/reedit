@@ -33,12 +33,33 @@ test('зависший движок показывает ошибку с пов�
     .getByRole('button', { name: 'Читать файл deadline.epub', exact: true })
     .click();
   await expect(page.locator('.reader-message')).toBeVisible();
+  await expect(page.locator('dialog[open]')).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        root: getComputedStyle(document.documentElement).backgroundColor,
+        body: getComputedStyle(document.body).backgroundColor,
+        theme: document
+          .querySelector('meta[name="theme-color"]')
+          ?.getAttribute('content'),
+      })),
+    )
+    .toEqual({
+      root: 'rgb(255, 254, 250)',
+      body: 'rgb(255, 254, 250)',
+      theme: '#fffefa',
+    });
   await page.clock.fastForward(61000);
   await expect(page.getByRole('alert')).toContainText('слишком много времени');
   await expect(
     page.getByRole('button', { name: 'Повторить открытие' }),
   ).toBeVisible();
   await page.getByRole('link', { name: 'К библиотеке', exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => document.documentElement.style.backgroundColor),
+    )
+    .toBe('');
   await expect(
     page.getByRole('list', { name: 'Книги библиотеки' }),
   ).toContainText('Проверка зависания');

@@ -73,7 +73,12 @@ export async function probeReader(
       onToggleControls: () => undefined,
       onError: () => undefined,
     });
-    return { ready: true, stages, error: '' };
+    const frame = host.querySelector('iframe');
+    const paragraph = frame?.contentDocument?.querySelector('p');
+    const letterSpacing = paragraph
+      ? frame?.contentWindow?.getComputedStyle(paragraph).letterSpacing
+      : '';
+    return { ready: true, stages, error: '', letterSpacing };
   } catch (error) {
     return {
       ready: false,

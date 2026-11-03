@@ -41,6 +41,7 @@ export function Dialog({
       viewport?.removeEventListener('resize', fitKeyboard);
       viewport?.removeEventListener('scroll', fitKeyboard);
       element.close();
+      window.dispatchEvent(new Event('reedit:dialog-closed'));
       document.body.style.overflow = previousOverflow;
       if (previousFocus instanceof HTMLElement && previousFocus.isConnected)
         previousFocus.focus({ preventScroll: true });

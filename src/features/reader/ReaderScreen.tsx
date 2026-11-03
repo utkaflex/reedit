@@ -89,15 +89,40 @@ export function ReaderScreen({
   );
   useEffect(() => {
     const meta = document.querySelector('meta[name="theme-color"]');
-    meta?.setAttribute(
-      'content',
+    const root = document.documentElement;
+    const previousRoot = root.style.backgroundColor;
+    const previousBody = document.body.style.backgroundColor;
+    const color =
       preferences.theme === 'dark'
         ? '#191b19'
         : preferences.theme === 'sepia'
           ? '#f1e5cd'
-          : '#fffefa',
-    );
+          : '#fffefa';
+    let firstFrame = 0,
+      secondFrame = 0;
+    const apply = () => {
+      meta?.setAttribute('content', color);
+      root.style.backgroundColor = color;
+      document.body.style.backgroundColor = color;
+    };
+    const repaint = () => {
+      cancelAnimationFrame(firstFrame);
+      cancelAnimationFrame(secondFrame);
+      apply();
+      firstFrame = requestAnimationFrame(() => {
+        secondFrame = requestAnimationFrame(apply);
+      });
+    };
+    repaint();
+    window.addEventListener('reedit:dialog-closed', repaint);
+    window.addEventListener('pageshow', repaint);
     return () => {
+      cancelAnimationFrame(firstFrame);
+      cancelAnimationFrame(secondFrame);
+      window.removeEventListener('reedit:dialog-closed', repaint);
+      window.removeEventListener('pageshow', repaint);
+      root.style.backgroundColor = previousRoot;
+      document.body.style.backgroundColor = previousBody;
       meta?.setAttribute(
         'content',
         getComputedStyle(document.documentElement)
@@ -405,6 +430,12 @@ export function ReaderScreen({
           <div className="reader-message form-stack">
             <h2>Не удалось открыть EPUB</h2>
             <p role="alert">{fatal}</p>
+            <details>
+              <summary>Сведения об ошибке</summary>
+              <p className="caption">
+                Сборка {__REEDIT_BUILD__.slice(0, 8)} · {preparation}
+              </p>
+            </details>
             <Button
               variant="secondary"
               onClick={() => {

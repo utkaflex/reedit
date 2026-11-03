@@ -52,6 +52,9 @@ it('serves Russian SPA, health, MIME, immutable assets and revalidated worker', 
     "frame-ancestors 'self'",
   );
   expect(page.headers.get('x-frame-options')).toBe('SAMEORIGIN');
+  expect(page.headers.get('content-security-policy')).toContain(
+    "style-src 'self' blob:",
+  );
   const worker = await fetch(base + '/sw.js');
   expect(worker.headers.get('cache-control')).toBe('no-cache');
   expect(worker.headers.get('service-worker-allowed')).toBe('/');
