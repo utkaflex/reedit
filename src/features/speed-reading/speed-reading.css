@@ -1,0 +1,98 @@
+.reader-host {
+  position: relative;
+}
+.speed-highlight-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 2;
+}
+.speed-word-highlight {
+  position: absolute;
+  background: #89b79266;
+  border-bottom: 2px solid #6c956b;
+  border-radius: 2px;
+  pointer-events: none;
+}
+.rsvp-stage {
+  position: absolute;
+  inset: 0;
+  background: var(--reader-paper);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  align-items: center;
+  padding: 20px;
+  text-align: center;
+}
+.rsvp-word {
+  max-height: 100%;
+  overflow: auto;
+  display: block;
+  width: 100%;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+  font-family: var(--font-ui);
+  font-variant-ligatures: none;
+}
+.rsvp-word--focus {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+.rsvp-word--focus span:first-child {
+  text-align: right;
+}
+.rsvp-word--focus span:last-child {
+  text-align: left;
+}
+.rsvp-word strong {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+}
+.speed-controls {
+  display: grid;
+  gap: 4px;
+}
+.speed-status {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+}
+.speed-buttons {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.speed-buttons .button {
+  padding: 8px;
+  font-size: var(--text-sm);
+}
+.speed-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+}
+.reader-progress-row > .button {
+  font-size: var(--text-xs);
+  padding: 4px 8px;
+}
+.reader-screen[data-speed-active='true'] .reader-top {
+  visibility: hidden;
+}
+
+.speed-controls .speed-buttons {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.speed-controls .speed-transport {
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+}
+.speed-transport .button:last-child {
+  grid-column: 1 / -1;
+}

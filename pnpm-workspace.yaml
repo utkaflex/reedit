@@ -1,0 +1,6 @@
+allowBuilds:
+  core-js: false
+  es5-ext: false
+  esbuild: true
+overrides:
+  '@xmldom/xmldom': ^0.8.15

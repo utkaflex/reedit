@@ -1,0 +1,81 @@
+:root {
+  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-editorial:
+    'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.5rem;
+  --text-title: clamp(2.5rem, 6vw, 3.75rem);
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.25rem;
+  --radius-pill: 999px;
+  --duration-fast: 140ms;
+  --duration-normal: 220ms;
+  --ease-standard: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --touch-target: 2.75rem;
+  --nav-height: 4.5rem;
+  --rail-width: 15.5rem;
+  --content-width: 64rem;
+  --shadow-cover: 0 6px 14px rgb(0 0 0 / 0.12);
+  --color-bg: #f7f6f2;
+  --color-surface: #fffefa;
+  --color-subtle: #eeede7;
+  --color-text: #252a27;
+  --color-muted: #686c65;
+  --color-border: #dcdfd6;
+  --color-accent: #395c45;
+  --color-accent-soft: #e6ebe3;
+  --color-on-accent: #ffffff;
+  --color-danger: #a32f35;
+  --color-backdrop: rgb(14 20 16 / 0.4);
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  --color-bg: #191b19;
+  --color-surface: #222521;
+  --color-subtle: #2b2f29;
+  --color-text: #eeeee6;
+  --color-muted: #a5aca0;
+  --color-border: #3a4037;
+  --color-accent: #b5ceb0;
+  --color-accent-soft: #303e31;
+  --color-on-accent: #192319;
+  --color-danger: #ffa6a5;
+  --color-backdrop: rgb(0 0 0 / 0.65);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']):not([data-theme='dark']) {
+    --color-bg: #191b19;
+    --color-surface: #222521;
+    --color-subtle: #2b2f29;
+    --color-text: #eeeee6;
+    --color-muted: #a5aca0;
+    --color-border: #3a4037;
+    --color-accent: #b5ceb0;
+    --color-accent-soft: #303e31;
+    --color-on-accent: #192319;
+    --color-danger: #ffa6a5;
+    --color-backdrop: rgb(0 0 0 / 0.65);
+    color-scheme: dark;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
+  }
+}

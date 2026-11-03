@@ -1,0 +1,15 @@
+node_modules/
+dist/
+test-results/
+playwright-report/
+.pnpm-store/
+
+.env
+.env.*
+!.env.example
+
+# Personal books/backups must never be staged accidentally.
+*.epub
+*.fb2
+*.zip
+!tests/fixtures/epubs/*.epub
