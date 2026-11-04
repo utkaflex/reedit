@@ -34,13 +34,11 @@ test('пустая коллекция остаётся доступна и им�
   await page.reload();
   await libraryAction(page, 'upload');
   const fixture = await makeEpubFixture();
-  await page
-    .getByLabel('Файл книги', { exact: true })
-    .setInputFiles({
-      name: 'keyboard.epub',
-      mimeType: 'application/epub+zip',
-      buffer: Buffer.from(fixture.bytes),
-    });
+  await page.getByLabel('Файл книги', { exact: true }).setInputFiles({
+    name: 'keyboard.epub',
+    mimeType: 'application/epub+zip',
+    buffer: Buffer.from(fixture.bytes),
+  });
   await expect(
     page.getByLabel('Название новой книги', { exact: true }),
   ).toBeVisible();
@@ -243,10 +241,12 @@ for (const width of [390, 1440]) {
           selection?.removeAllRanges();
           selection?.addRange(range);
         });
-      await page.getByRole('button', { name: 'Заметка', exact: true }).click();
-      await expect(
-        page.getByLabel('Комментарий', { exact: true }),
-      ).toBeVisible();
+      await page
+        .getByRole('button', { name: 'Заметка', exact: true })
+        .click({ timeout: 1000 });
+      await expect(page.getByLabel('Комментарий', { exact: true })).toBeVisible(
+        { timeout: 1000 },
+      );
     }).toPass({ timeout: 10000 });
     await page
       .getByLabel('Комментарий', { exact: true })

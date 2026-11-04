@@ -1,12 +1,14 @@
 # Reedit
 
+Редизайн 04.11.2026: [реализованное, проверки и ограничения](docs/redesign-2026-11-04.md), [desktop/mobile снимки](docs/screenshots/redesign-2026-11-04/README.md).
+
 Исправления после первой проверки на iPhone: [импорт, читалка и мобильные экраны](docs/iphone-hotfix.md). Обновление установленной PWA: Настройки → Проверить обновления → Обновить приложение, после выхода из чтения.
 
 Локальная PWA-читалка для iPhone: библиотека, EPUB/FB2, обычное чтение, RSVP/Guided, аннотации, статистика и дневник. Все пользовательские данные локальны в IndexedDB (аддитивная схема v9). Офлайн-оболочка и ZIP-копии описаны в [pwa.md](docs/pwa.md) и [backup.md](docs/backup.md). Внешние каталоги предоставляют только метаданные через ограниченный proxy.
 
 Node 24, pnpm 11.25.0: `pnpm install --frozen-lockfile`, затем `pnpm dev`.
 
-Подготовка Railway: [пошаговая инструкция](docs/deployment.md). Подключите этот репозиторий к одному Railway-сервису: `railway.json` выбирает Dockerfile, сервер использует `PORT`, проверка готовности — `/healthz`. БД и Volume не нужны. Развёртывание выполняет владелец; публичный адрес ещё не создан.
+Railway: [пошаговая инструкция](docs/deployment.md). Один Docker-сервис, сервер использует `PORT`, проверка готовности — `/healthz`. БД и Volume не нужны. Публичный адрес владельца: https://reedit-production.up.railway.app/.
 
 Локальная production-проверка: `pnpm build`, затем `pnpm start`, адрес `http://localhost:4174`. Проверки: `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:e2e --project chromium --project chromium-mobile --workers 1`, `pnpm test:pwa`, `pnpm format:check`. Отчёт и ограничения: [финальный аудит](docs/release-audit.md).
 
