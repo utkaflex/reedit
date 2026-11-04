@@ -60,6 +60,11 @@ export function ReaderScreen({
   const [retry, setRetry] = useState(0);
   const [fromStart, setFromStart] = useState(false);
   const [selection, setSelection] = useState<ReaderSelection | null>(null);
+  const selectedFragment = useRef<ReaderSelection | null>(null);
+  const clearSelection = useCallback(() => {
+    selectedFragment.current = null;
+    setSelection(null);
+  }, []);
   const [notesPanel, setNotesPanel] = useState<'saved' | 'bookmark' | null>(
     null,
   );
@@ -192,18 +197,30 @@ export function ReaderScreen({
           },
           onInteraction: activityInteraction,
           onSelection: (value) => {
-            if (!abort.signal.aborted) setSelection(value);
+            if (!abort.signal.aborted && value) {
+              selectedFragment.current = value;
+              setSelection(value);
+              setControls(true);
+            }
           },
           onLocation: (next) => {
             if (!abort.signal.aborted) {
+              if (
+                selectedFragment.current &&
+                selectedFragment.current.anchor.start.spineIndex !==
+                  next.spineIndex
+              )
+                clearSelection();
               setLocation(next);
               observeActivity(next);
               if (!speedActive.current) positions.push(next);
             }
           },
           onToggleControls: () => {
-            if (!abort.signal.aborted && !speedActive.current)
-              setControls((value) => !value);
+            if (!abort.signal.aborted && !speedActive.current) {
+              if (selectedFragment.current) clearSelection();
+              else setControls((value) => !value);
+            }
           },
           onBusy: (value) => {
             if (!abort.signal.aborted) setBusy(value);
@@ -301,10 +318,12 @@ export function ReaderScreen({
     attachActivity,
     observeActivity,
     activityInteraction,
+    clearSelection,
   ]);
   const command = (action: (reader: ReaderSession) => Promise<boolean>) => {
     const reader = session.current;
     if (!reader) return;
+    clearSelection();
     void action(reader).catch((error: unknown) => {
       setNotice(
         error instanceof Error
@@ -385,8 +404,22 @@ export function ReaderScreen({
           variant="quiet"
           aria-label="Цитаты и закладки"
           disabled={state !== 'ready' || busy}
+          onPointerDown={(event) => {
+            const value = session.current?.getSelection();
+            if (value) {
+              event.preventDefault();
+              selectedFragment.current = value;
+              setSelection(value);
+            }
+          }}
           onClick={() => {
-            setNotesPanel('saved');
+            const value =
+              session.current?.getSelection() ?? selectedFragment.current;
+            if (value) {
+              selectedFragment.current = value;
+              setSelection(value);
+              setControls(true);
+            } else setNotesPanel('saved');
           }}
         >
           <Icon name="quote" />
@@ -659,9 +692,7 @@ export function ReaderScreen({
               onClose={() => {
                 setNotesPanel(null);
               }}
-              onClear={() => {
-                setSelection(null);
-              }}
+              onClear={clearSelection}
             />
           </>
         )}
@@ -682,7 +713,7 @@ export function ReaderScreen({
             <Button
               onClick={() => {
                 setSpeedChooser(false);
-                setSelection(null);
+                clearSelection();
                 speed.run((session) => session.open('rsvp'));
               }}
             >
@@ -692,7 +723,7 @@ export function ReaderScreen({
               variant="secondary"
               onClick={() => {
                 setSpeedChooser(false);
-                setSelection(null);
+                clearSelection();
                 speed.run((session) => session.open('guided'));
               }}
             >

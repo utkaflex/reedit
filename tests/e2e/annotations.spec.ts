@@ -49,6 +49,98 @@ async function select(page: Page, end = 22) {
     page.getByRole('group', { name: 'Действия с выделенным текстом' }),
   ).toBeVisible();
 }
+test('цитата доступна без события selectionchange и сохраняется после потери нативного Range', async ({
+  page,
+}) => {
+  await open(page);
+  await page
+    .frameLocator('iframe')
+    .locator('p')
+    .first()
+    .evaluate((p) => {
+      const doc = p.ownerDocument;
+      doc.addEventListener(
+        'selectionchange',
+        (event) => {
+          event.stopImmediatePropagation();
+        },
+        true,
+      );
+      doc.defaultView?.focus();
+      const text = p.firstChild;
+      if (!text) throw Error('Missing text');
+      const range = doc.createRange();
+      range.setStart(text, 0);
+      range.setEnd(text, 22);
+      const selected = doc.defaultView?.getSelection();
+      selected?.removeAllRanges();
+      selected?.addRange(range);
+    });
+  const save = page.getByRole('button', {
+    name: 'Сохранить цитату',
+    exact: true,
+  });
+  await expect(save).toBeVisible();
+  await expect(page.locator('.selection-preview')).toHaveText(
+    'Спокойный русский текс',
+  );
+  await page
+    .frameLocator('iframe')
+    .locator('p')
+    .first()
+    .evaluate((p) => {
+      p.ownerDocument.defaultView?.getSelection()?.removeAllRanges();
+    });
+  // A native-menu collapse must not discard the explicit quote snapshot.
+  await expect(save).toBeVisible();
+  await save.click();
+  await expect(
+    page.getByText('Цитата сохранена', { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Закрыть книгу', exact: true })
+    .click();
+  await expect(page).toHaveURL(/#\/library$/);
+  await page.goto('/#/quotes');
+  await expect(page.locator('.saved-fragment blockquote')).toHaveText(
+    'Спокойный русский текс',
+  );
+  await page.reload();
+  await expect(page.locator('.saved-fragment')).toHaveCount(1);
+});
+test('кнопка цитат снимает выделение синхронно, до события selectionchange', async ({
+  page,
+}) => {
+  await open(page);
+  await page
+    .frameLocator('iframe')
+    .locator('p')
+    .first()
+    .evaluate((p) => {
+      const doc = p.ownerDocument,
+        text = p.firstChild;
+      if (!text) throw Error('Missing text');
+      const range = doc.createRange();
+      range.setStart(text, 0);
+      range.setEnd(text, 22);
+      const selection = doc.defaultView?.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      // One script task: the document event/poll cannot populate React state first.
+      doc.defaultView?.parent.document
+        .querySelector<HTMLButtonElement>(
+          'button[aria-label="Цитаты и закладки"]',
+        )
+        ?.click();
+    });
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page
+    .getByRole('button', { name: 'Сохранить цитату', exact: true })
+    .click();
+  await expect(
+    page.getByText('Цитата сохранена', { exact: true }),
+  ).toBeVisible();
+});
 test('цитата, комментарий, цвет, закладка, экспорт, перезапуск и переход', async ({
   page,
 }) => {
@@ -211,7 +303,9 @@ test('аннотации остаются после удаления файла
 }) => {
   const fixture = await open(page);
   await select(page);
-  await page.getByRole('button', { name: 'Выделить', exact: true }).dblclick();
+  await page
+    .getByRole('button', { name: 'Сохранить цитату', exact: true })
+    .dblclick();
   await page.getByRole('button', { name: 'Закрыть книгу' }).click();
   await page
     .getByRole('list', { name: 'Книги библиотеки' })

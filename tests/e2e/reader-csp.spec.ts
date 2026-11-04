@@ -65,3 +65,33 @@ for (const scenario of [
     });
   });
 }
+test('нативное выделение передаётся из XHTML без selectionchange', async ({
+  page,
+}) => {
+  const text = 'Точный русский фрагмент для сохранения цитаты.';
+  const fixture = await makeEpubFixture({
+    chapters: [{ name: 'quote.xhtml', text }],
+  });
+  await page.route('**/__reader-selection', (route) =>
+    route.fulfill({
+      body: '<!doctype html><html><body></body></html>',
+      contentType: 'text/html',
+      headers: securityHeaders,
+    }),
+  );
+  await page.goto('/__reader-selection');
+  const result = await page.evaluate(
+    async (bytes) => {
+      const path = '/tests/fixtures/reader-probe.ts';
+      const loaded = (await import(
+        path
+      )) as typeof import('../fixtures/reader-probe');
+      return loaded.probeReader(bytes, 'paginated', true);
+    },
+    [...fixture.bytes],
+  );
+  expect(result).toMatchObject({
+    ready: true,
+    selectedQuote: text.slice(0, 20),
+  });
+});

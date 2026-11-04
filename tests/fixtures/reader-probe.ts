@@ -9,6 +9,7 @@ import {
 export async function probeReader(
   bytes: number[],
   mode: 'paginated' | 'scroll' = 'paginated',
+  checkSelection = false,
 ) {
   const adapter = new EpubJsAdapter();
   const abort = new AbortController();
@@ -45,6 +46,12 @@ export async function probeReader(
   host.style.cssText = 'position:fixed;inset:0;width:390px;height:600px;';
   document.body.append(host);
   const stages: string[] = [];
+  let selectedQuote = '';
+  let selectionReady = () => {};
+  const selected = new Promise<void>((resolve) => {
+    selectionReady = resolve;
+  });
+  let selectionTimer: ReturnType<typeof setTimeout> | undefined;
   let session: ReaderSession | undefined;
   const timer = setTimeout(() => {
     abort.abort();
@@ -72,13 +79,41 @@ export async function probeReader(
       onBusy: () => undefined,
       onToggleControls: () => undefined,
       onError: () => undefined,
+      onSelection: (value) => {
+        if (value) {
+          selectedQuote = value.quote;
+          selectionReady();
+        }
+      },
     });
     const frame = host.querySelector('iframe');
     const paragraph = frame?.contentDocument?.querySelector('p');
     const letterSpacing = paragraph
       ? frame?.contentWindow?.getComputedStyle(paragraph).letterSpacing
       : '';
-    return { ready: true, stages, error: '', letterSpacing };
+    if (checkSelection && paragraph?.firstChild) {
+      const doc = paragraph.ownerDocument;
+      doc.addEventListener(
+        'selectionchange',
+        (event) => {
+          event.stopImmediatePropagation();
+        },
+        true,
+      );
+      const range = doc.createRange();
+      range.setStart(paragraph.firstChild, 0);
+      range.setEnd(paragraph.firstChild, 20);
+      const native = doc.defaultView?.getSelection();
+      native?.removeAllRanges();
+      native?.addRange(range);
+      await Promise.race([
+        selected,
+        new Promise<void>((resolve) => {
+          selectionTimer = setTimeout(resolve, 2000);
+        }),
+      ]);
+    }
+    return { ready: true, stages, error: '', letterSpacing, selectedQuote };
   } catch (error) {
     return {
       ready: false,
@@ -87,6 +122,7 @@ export async function probeReader(
     };
   } finally {
     clearTimeout(timer);
+    clearTimeout(selectionTimer);
     abort.abort();
     session?.destroy();
   }

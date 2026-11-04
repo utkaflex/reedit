@@ -34,6 +34,15 @@ export function ReaderAnnotations({
   const [label, setLabel] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  useEffect(() => {
+    if (!message) return;
+    const timer = setTimeout(() => {
+      setMessage('');
+    }, 5000);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [message]);
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const bookmark = useRef<ReaderSelection | null>(null);
@@ -99,7 +108,7 @@ export function ReaderAnnotations({
       await refresh();
       setDraft(null);
       onClear();
-      setMessage('Фрагмент сохранён');
+      setMessage('Цитата сохранена');
     });
   return (
     <>
@@ -112,14 +121,15 @@ export function ReaderAnnotations({
             event.preventDefault();
           }}
         >
+          <p className="selection-preview">{selection.quote}</p>
           <Button
-            variant="quiet"
+            variant="secondary"
             disabled={busy}
             onClick={() => {
               void save(selection, '');
             }}
           >
-            Выделить
+            Сохранить цитату
           </Button>
           <Button
             variant="quiet"
@@ -170,6 +180,11 @@ export function ReaderAnnotations({
           {error && <span role="alert">{error}</span>}
           {message && <span role="status">{message}</span>}
         </div>
+      )}
+      {message && !selection && !draft && !panel && (
+        <p className="annotation-message" role="status">
+          {message}
+        </p>
       )}
       {!selection && !panel && error && (
         <div className="annotation-error">

@@ -25,6 +25,7 @@ import {
 } from '../../domain/reader';
 import { ReaderNavigationGate } from '../../services/reader-navigation';
 import { resolveReference } from './xml';
+import { observeNativeSelection } from './native-selection';
 import {
   buildDocumentTextIndex,
   indexTextSection,
@@ -1161,13 +1162,10 @@ class EpubReaderSession implements ReaderSession {
       passive: true,
       signal: listeners.signal,
     });
-    doc.addEventListener(
-      'selectionchange',
-      () => {
-        if (!this.disposed) this.options.onSelection?.(this.getSelection());
-      },
-      { signal: listeners.signal },
-    );
+    const stopSelection = observeNativeSelection(doc, contents.window, () => {
+      if (!this.disposed && this.content === contents && !this.speedStop)
+        this.options.onSelection?.(this.getSelection());
+    });
     const point = (event: PointerEvent) => {
       const frame = contents.window.frameElement?.getBoundingClientRect();
       const host = this.options.host.getBoundingClientRect();
@@ -1350,6 +1348,7 @@ class EpubReaderSession implements ReaderSession {
     );
     return () => {
       listeners.abort();
+      stopSelection();
       if (tap) clearTimeout(tap);
       if (this.content === contents) this.content = null;
     };
