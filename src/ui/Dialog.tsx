@@ -7,6 +7,8 @@ export interface DialogProps {
   onClose: () => void;
   children: ReactNode;
   presentation?: 'dialog' | 'panel';
+  className?: string;
+  footer?: ReactNode;
 }
 export function Dialog({
   open,
@@ -14,6 +16,8 @@ export function Dialog({
   onClose,
   children,
   presentation = 'dialog',
+  className = '',
+  footer,
 }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -28,7 +32,13 @@ export function Dialog({
     const fitKeyboard = () => {
       if (!viewport) return;
       element.style.maxHeight = `max(120px, calc(${String(viewport.height)}px - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 32px))`;
-      if (presentation === 'panel') return;
+      if (presentation === 'panel') {
+        element.style.top = `${String(viewport.offsetTop + viewport.height)}px`;
+        element.style.bottom = 'auto';
+        element.style.marginBlock = '0';
+        element.style.translate = '0 -100%';
+        return;
+      }
       element.style.top = `${String(viewport.offsetTop + viewport.height / 2)}px`;
       element.style.bottom = 'auto';
       element.style.marginBlock = '0';
@@ -50,7 +60,7 @@ export function Dialog({
   return (
     <dialog
       ref={ref}
-      className={`dialog dialog--${presentation}`}
+      className={`dialog dialog--${presentation} ${className} ${footer ? 'dialog--with-footer' : ''}`}
       aria-labelledby={titleId}
       tabIndex={-1}
       onKeyDown={(event) => {
@@ -102,6 +112,7 @@ export function Dialog({
         </Button>
       </header>
       <div className="dialog__body">{children}</div>
+      {footer && <footer className="dialog__footer">{footer}</footer>}
     </dialog>
   );
 }

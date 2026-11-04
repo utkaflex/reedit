@@ -97,28 +97,34 @@ export function ReadingEditor({
               </option>
             ))}
           </SelectField>
-          <TextField
-            label="Дата начала"
-            type="date"
-            value={start}
-            onChange={(event) => {
-              setStart(event.target.value);
-            }}
-            required={status === 'active' || status === 'finished'}
-          />
-          <TextField
-            label="Дата завершения"
-            type="date"
-            value={finish}
-            onChange={(event) => {
-              setFinish(event.target.value);
-            }}
-            required={status === 'finished'}
-          />
+          {(status !== 'planned' || start) && (
+            <TextField
+              label="Дата начала"
+              type="date"
+              value={start}
+              onChange={(event) => {
+                setStart(event.target.value);
+              }}
+              required={status === 'active' || status === 'finished'}
+            />
+          )}
+          {(status === 'finished' || status === 'abandoned' || finish) && (
+            <TextField
+              label="Дата завершения"
+              type="date"
+              value={finish}
+              onChange={(event) => {
+                setFinish(event.target.value);
+              }}
+              required={status === 'finished'}
+            />
+          )}
           <p className="caption">
-            Для «Хочу прочитать» оставьте даты пустыми. Для «Читаю» и «Отложено»
-            дата завершения должна быть пустой. Завершение не может быть раньше
-            начала.
+            {status === 'planned'
+              ? 'В планах — даты пока не нужны.'
+              : status === 'finished'
+                ? 'Укажите период этого прочтения.'
+                : 'Дату начала можно уточнить вручную.'}
           </p>
           <SelectField
             label="Оценка"

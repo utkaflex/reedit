@@ -16,7 +16,11 @@ export interface ReaderAddress {
   savedId?: Id;
   savedKind?: 'annotations' | 'bookmarks';
 }
-export async function loadReader(store: LocalStore, address: ReaderAddress) {
+export async function loadReader(
+  store: LocalStore,
+  address: ReaderAddress,
+  defaults: ReaderPreferences = defaultReaderPreferences,
+) {
   const [book, file, reading, index, position, settings] = await Promise.all([
     store.repositories.books.get(address.bookId),
     store.repositories.bookFiles.get(address.fileId),
@@ -47,7 +51,11 @@ export async function loadReader(store: LocalStore, address: ReaderAddress) {
   const preferences =
     settings?.reader && validReaderPreferences(settings.reader)
       ? settings.reader
-      : { ...defaultReaderPreferences };
+      : {
+          ...(validReaderPreferences(defaults)
+            ? defaults
+            : defaultReaderPreferences),
+        };
   const documentIndex = await store.getDocumentTextIndex(file.id, file.sha256);
   return { book, file, reading, index, position, preferences, documentIndex };
 }

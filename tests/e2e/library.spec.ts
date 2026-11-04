@@ -1,9 +1,8 @@
+import { libraryAction } from '../fixtures/library-actions';
 import { expect, test, type Page } from '@playwright/test';
 
 async function createBook(page: Page, title = 'Тестовая книга') {
-  await page
-    .getByRole('button', { name: 'Добавить книгу', exact: true })
-    .click();
+  await libraryAction(page, 'manual');
   await page
     .getByRole('textbox', { name: 'Название', exact: true })
     .fill(title);
@@ -26,9 +25,7 @@ test('книга, локальная обложка, отзыв, оценка и
   page,
 }) => {
   await page.goto('/');
-  await page
-    .getByRole('button', { name: 'Добавить книгу', exact: true })
-    .click();
+  await libraryAction(page, 'manual');
   await page
     .getByRole('textbox', { name: 'Название', exact: true })
     .fill('Тестовая книга с обложкой');
@@ -92,10 +89,13 @@ test('книга, локальная обложка, отзыв, оценка и
   ).toBeVisible();
   await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
   await page.reload();
-  await page.locator('.library-filters > summary').click();
+  await page.getByRole('button', { name: /Фильтры и сортировка/ }).click();
   await page
     .getByLabel('Коллекция', { exact: true })
     .selectOption({ label: 'Моя тестовая коллекция' });
+  await page
+    .getByRole('button', { name: 'Показать книги', exact: true })
+    .click();
   const books = page.getByRole('list', { name: 'Книги библиотеки' });
   await expect(books.getByRole('listitem')).toHaveCount(1);
   await expect(books.locator('img')).toHaveJSProperty('naturalWidth', 20);
@@ -194,9 +194,7 @@ test('дубли, поиск, фильтры, список и подтвержд
   await page.goto('/');
   await createBook(page);
   await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
-  await page
-    .getByRole('button', { name: 'Добавить книгу', exact: true })
-    .click();
+  await libraryAction(page, 'manual');
   await page.getByLabel('Название', { exact: true }).fill('Тестовая книга');
   await page.getByLabel('Автор', { exact: true }).fill('Тестовый автор');
   await page.getByRole('button', { name: 'Добавить в библиотеку' }).click();
@@ -224,15 +222,17 @@ test('дубли, поиск, фильтры, список и подтвержд
   await expect(
     page.getByRole('list', { name: 'Книги библиотеки' }).getByRole('listitem'),
   ).toHaveCount(1);
-  await page.locator('.library-filters > summary').click();
+  await page.getByRole('button', { name: /Фильтры и сортировка/ }).click();
   await page
     .getByLabel('Статус книги', { exact: true })
     .selectOption('finished');
+  await page
+    .getByRole('button', { name: 'Показать книги', exact: true })
+    .click();
   await expect(
     page.getByRole('heading', { name: 'Ничего не найдено' }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Сбросить поиск и фильтры' }).click();
-  await page.locator('.library-filters > summary').click();
   await page.getByText('Список', { exact: true }).click();
   await expect(page.locator('.book-list')).toBeVisible();
   expect(

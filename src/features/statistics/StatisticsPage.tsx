@@ -162,41 +162,55 @@ export function StatisticsPage({ store }: { store: LocalStore }) {
           Добавить бумажную книгу
         </Button>
       </div>
-      <section className="statistics-summary" aria-label="Годовая сводка">
-        <div className="statistics-lead">
-          <span className="caption">Ваш {year} год</span>
-          <strong>{summary.booksYear}</strong>
-          <h2>книг прочитано</h2>
+      {data.readings.length > 0 ? (
+        <section className="statistics-summary" aria-label="Годовая сводка">
+          <div className="statistics-lead">
+            <span className="caption">Ваш {year} год</span>
+            <strong>{summary.booksYear}</strong>
+            <h2>книг прочитано</h2>
+            <p className="caption">
+              {summary.yearly.length} завершённых прочтений ·{' '}
+              {duration(summary.yearTime)} с книгами
+            </p>
+          </div>
+          {data.readings.length > 0 && (
+            <dl className="statistics-facts">
+              <div>
+                <dt>За текущий месяц</dt>
+                <dd>{summary.booksMonth}</dd>
+              </div>
+              <div>
+                <dt>За всё время</dt>
+                <dd>{summary.booksAll}</dd>
+              </div>
+              <div>
+                <dt>Средняя оценка за {year}</dt>
+                <dd>
+                  {summary.averageRating?.toFixed(1) ?? '—'}
+                  <small> / 5</small>
+                </dd>
+              </div>
+              <div>
+                <dt>Уникальных слов за всё время</dt>
+                <dd>{summary.uniqueWords.toLocaleString('ru')}</dd>
+              </div>
+            </dl>
+          )}
+        </section>
+      ) : (
+        <section className="statistics-empty">
+          <p className="eyebrow">Ваш личный ритм</p>
+          <h2>История начинается с первой книги</h2>
           <p className="caption">
-            {summary.yearly.length} завершённых прочтений ·{' '}
-            {duration(summary.yearTime)} с книгами
+            Читайте в Reedit или добавьте бумажную книгу. Здесь появятся ваши
+            настоящие итоги.
           </p>
-        </div>
-        {data.readings.length > 0 && (
-          <dl className="statistics-facts">
-            <div>
-              <dt>За текущий месяц</dt>
-              <dd>{summary.booksMonth}</dd>
-            </div>
-            <div>
-              <dt>За всё время</dt>
-              <dd>{summary.booksAll}</dd>
-            </div>
-            <div>
-              <dt>Средняя оценка за {year}</dt>
-              <dd>
-                {summary.averageRating?.toFixed(1) ?? '—'}
-                <small> / 5</small>
-              </dd>
-            </div>
-            <div>
-              <dt>Уникальных слов за всё время</dt>
-              <dd>{summary.uniqueWords.toLocaleString('ru')}</dd>
-            </div>
-          </dl>
-        )}
-      </section>
-      <section className="statistics-section">
+          <a className="button button--secondary" href="#/library">
+            Выбрать книгу
+          </a>
+        </section>
+      )}
+      <section className="statistics-section statistics-goal-section">
         <h2>Цель на {year} год</h2>
         <p>
           {goal
@@ -210,47 +224,53 @@ export function StatisticsPage({ store }: { store: LocalStore }) {
             value={Math.min(goal, summary.booksYear)}
           />
         )}
-        <form
-          key={`${String(year)}-${String(goal)}`}
-          className="statistics-goal"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const target = Number(new FormData(e.currentTarget).get('goal'));
-            void run(async () => {
-              const existing = (await store.repositories.settings.list())[0];
-              const now = Math.max(Date.now(), (existing?.updatedAt ?? 0) + 1);
-              await store.repositories.settings.save(
-                {
-                  ...(existing ?? {
-                    id: newId(),
-                    createdAt: now,
-                    key: 'local' as const,
-                    theme: 'system' as const,
-                    locale: 'ru' as const,
-                  }),
-                  updatedAt: now,
-                  readingGoals: { ...existing?.readingGoals, [year]: target },
-                },
-                { expectedUpdatedAt: existing?.updatedAt ?? null },
-              );
-            });
-          }}
-        >
-          <TextField
-            label="Книг за год"
-            name="goal"
-            type="number"
-            min="0"
-            max="1000"
-            step="1"
-            required
-            defaultValue={goal}
-            hint="0 — без цели. Повторные прочтения не увеличивают число книг."
-          />
-          <Button type="submit" disabled={busy}>
-            Сохранить цель
-          </Button>
-        </form>
+        <details className="goal-editor">
+          <summary>{goal ? 'Изменить цель' : 'Установить цель'}</summary>
+          <form
+            key={`${String(year)}-${String(goal)}`}
+            className="statistics-goal"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const target = Number(new FormData(e.currentTarget).get('goal'));
+              void run(async () => {
+                const existing = (await store.repositories.settings.list())[0];
+                const now = Math.max(
+                  Date.now(),
+                  (existing?.updatedAt ?? 0) + 1,
+                );
+                await store.repositories.settings.save(
+                  {
+                    ...(existing ?? {
+                      id: newId(),
+                      createdAt: now,
+                      key: 'local' as const,
+                      theme: 'system' as const,
+                      locale: 'ru' as const,
+                    }),
+                    updatedAt: now,
+                    readingGoals: { ...existing?.readingGoals, [year]: target },
+                  },
+                  { expectedUpdatedAt: existing?.updatedAt ?? null },
+                );
+              });
+            }}
+          >
+            <TextField
+              label="Книг за год"
+              name="goal"
+              type="number"
+              min="0"
+              max="1000"
+              step="1"
+              required
+              defaultValue={goal}
+              hint="0 — без цели. Повторные прочтения не увеличивают число книг."
+            />
+            <Button type="submit" disabled={busy}>
+              Сохранить цель
+            </Button>
+          </form>
+        </details>
       </section>
       <details className="statistics-details">
         <summary>Подробная статистика</summary>
@@ -287,38 +307,42 @@ export function StatisticsPage({ store }: { store: LocalStore }) {
             <p className="caption">
               {year} · от января к декабрю, строки — понедельник–воскресенье.
             </p>
-            <div
-              className="activity-scroll"
-              tabIndex={0}
-              role="region"
-              aria-label="Календарь активности; подробности доступны в списке дней"
-            >
-              <div className="activity-calendar" aria-hidden="true">
-                {Array.from({ length: offset }, (_, i) => (
-                  <span key={`gap-${String(i)}`} />
-                ))}
-                {calendar.map((day) => {
-                  const ms = summary.days.get(day) ?? 0;
-                  return (
-                    <span
-                      key={day}
-                      data-level={
-                        ms === 0
-                          ? 0
-                          : ms < 600000
-                            ? 1
-                            : ms < 1800000
-                              ? 2
-                              : ms < 3600000
-                                ? 3
-                                : 4
-                      }
-                      title={`${day}: ${duration(ms)}`}
-                    />
-                  );
-                })}
+            {summary.days.size > 0 ? (
+              <div
+                className="activity-scroll"
+                tabIndex={0}
+                role="region"
+                aria-label="Календарь активности; подробности доступны в списке дней"
+              >
+                <div className="activity-calendar" aria-hidden="true">
+                  {Array.from({ length: offset }, (_, i) => (
+                    <span key={`gap-${String(i)}`} />
+                  ))}
+                  {calendar.map((day) => {
+                    const ms = summary.days.get(day) ?? 0;
+                    return (
+                      <span
+                        key={day}
+                        data-level={
+                          ms === 0
+                            ? 0
+                            : ms < 600000
+                              ? 1
+                              : ms < 1800000
+                                ? 2
+                                : ms < 3600000
+                                  ? 3
+                                  : 4
+                        }
+                        title={`${day}: ${duration(ms)}`}
+                      />
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            ) : (
+              <p className="caption">В этом году активных сессий пока нет.</p>
+            )}
             <div className="caption">
               Светлее — меньше времени · темнее — больше
             </div>

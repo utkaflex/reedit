@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { dateInput, statusLabels } from '../../domain/library';
 import { useBlobUrl } from '../../ui/useBlobUrl';
 import { BookCard } from '../../ui/BookCard';
+import { BookCover } from '../../ui/BookCover';
 import { Dialog } from '../../ui/Dialog';
 import { Button } from '../../ui/Button';
 import { formatCount } from '../../ui/format';
@@ -19,11 +20,13 @@ export function LibraryCard({
   book,
   reading,
   onOpen,
+  onRead,
   list,
 }: {
   book: Book;
   reading: Reading | undefined;
   onOpen: () => void;
+  onRead?: (() => void) | undefined;
   list: boolean;
 }) {
   const url = useBlobUrl(book.cover);
@@ -43,6 +46,16 @@ export function LibraryCard({
         {statusLabels[reading?.status ?? 'planned']}
         {reading?.rating ? ` · ${reading.rating.toLocaleString('ru')} / 5` : ''}
       </p>
+      {onRead && (
+        <Button
+          className="book-quick-read"
+          variant="quiet"
+          onClick={onRead}
+          aria-label={`Читать «${book.title}»`}
+        >
+          Читать →
+        </Button>
+      )}
     </li>
   );
 }
@@ -88,6 +101,7 @@ export function BookView({
   return (
     <Dialog
       open
+      className="book-dialog"
       title={book.title}
       onClose={() => {
         if (!busy) onClose();
@@ -95,6 +109,9 @@ export function BookView({
     >
       <div className="form-stack book-detail">
         <div className="book-detail-hero">
+          {(!preview || preview === failedPreview) && (
+            <BookCover title={book.title} authors={book.authors} />
+          )}
           {preview && preview !== failedPreview && (
             <img
               className="cover-preview"
@@ -105,7 +122,12 @@ export function BookView({
               alt={`Обложка «${book.title}»`}
             />
           )}
-          <p>{book.authors.join(', ') || 'Автор не указан'}</p>
+          <div>
+            <p>{book.authors.join(', ') || 'Автор не указан'}</p>
+            <p className="status-chip">
+              {statusLabels[currentReading?.status ?? 'planned']}
+            </p>
+          </div>
         </div>
         {!book.cover && preview && preview !== failedPreview && (
           <p className="caption">

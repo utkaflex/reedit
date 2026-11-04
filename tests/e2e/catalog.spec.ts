@@ -1,3 +1,4 @@
+import { libraryAction } from '../fixtures/library-actions';
 import { expect, test, type Page } from '@playwright/test';
 import {
   catalogEdition,
@@ -46,9 +47,7 @@ async function mockCatalog(page: Page) {
   return requests;
 }
 async function search(page: Page) {
-  await page
-    .getByRole('button', { name: 'Найти в каталогах', exact: true })
-    .click();
+  await libraryAction(page, 'catalog');
   await page
     .getByLabel('Запрос в каталог', { exact: true })
     .fill('Преступление и наказание');
@@ -139,7 +138,7 @@ test('издание → локальная книга → исправлени�
       { name: 'chapter.xhtml', text: 'Собственный синтетический текст.' },
     ],
   });
-  await page.getByLabel('Файл EPUB', { exact: true }).setInputFiles({
+  await page.getByLabel('Файл книги', { exact: true }).setInputFiles({
     name: 'my.epub',
     mimeType: 'application/epub+zip',
     buffer: Buffer.from(fixture.bytes),
@@ -240,9 +239,7 @@ test('debounce, кэш и офлайн не отправляют устарев�
 }) => {
   const requests = await mockCatalog(page);
   await page.goto('/');
-  await page
-    .getByRole('button', { name: 'Найти в каталогах', exact: true })
-    .click();
+  await libraryAction(page, 'catalog');
   await page.getByLabel('Запрос в каталог', { exact: true }).fill('Старый');
   await page.getByLabel('Запрос в каталог', { exact: true }).fill('Новый');
   await expect(
@@ -265,9 +262,7 @@ test('debounce, кэш и офлайн не отправляют устарев�
   await page
     .getByRole('button', { name: 'Закрыть поиск', exact: true })
     .click();
-  await page
-    .getByRole('button', { name: 'Добавить книгу', exact: true })
-    .click();
+  await libraryAction(page, 'manual');
   await expect(
     page.getByRole('textbox', { name: 'Название', exact: true }),
   ).toBeVisible();
@@ -277,9 +272,7 @@ test('Google: свой источник и атрибуция, описание 
 }) => {
   await mockCatalog(page);
   await page.goto('/');
-  await page
-    .getByRole('button', { name: 'Найти в каталогах', exact: true })
-    .click();
+  await libraryAction(page, 'catalog');
   await page
     .getByLabel('Источник каталога', { exact: true })
     .selectOption('google-books');
@@ -358,9 +351,7 @@ test('устаревший ответ не заменяет новый поис�
       .catch(() => {});
   });
   await page.goto('/');
-  await page
-    .getByRole('button', { name: 'Найти в каталогах', exact: true })
-    .click();
+  await libraryAction(page, 'catalog');
   const sent = page.waitForRequest((request) =>
     request.url().includes('open/search'),
   );

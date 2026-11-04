@@ -1,3 +1,4 @@
+import { libraryAction } from '../fixtures/library-actions';
 import { expect, test, type Page } from '@playwright/test';
 import { makeEpubFixture } from '../fixtures/epub';
 async function open(page: Page, long = false) {
@@ -18,8 +19,8 @@ async function open(page: Page, long = false) {
     toc: [0],
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Импорт EPUB', exact: true }).click();
-  await page.getByLabel('Файл EPUB', { exact: true }).setInputFiles({
+  await libraryAction(page, 'upload');
+  await page.getByLabel('Файл книги', { exact: true }).setInputFiles({
     name: 'speed.epub',
     mimeType: 'application/epub+zip',
     buffer: Buffer.from(fixture.bytes),

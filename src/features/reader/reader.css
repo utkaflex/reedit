@@ -419,3 +419,34 @@
     font-size: 0.6875rem;
   }
 }
+.reader-host {
+  max-width: 800px;
+  margin-inline: auto;
+}
+.reader-toc .button[aria-current='location'] {
+  background: var(--color-accent-soft);
+  font-weight: 600;
+  border-left: 3px solid var(--color-accent);
+}
+.reader-navigation .reader-save-state {
+  font-size: 12px;
+  line-height: 1.3;
+  min-height: 44px;
+  padding: 6px;
+}
+@media (min-width: 1000px) {
+  .reader-stage {
+    background: var(--reader-paper);
+  }
+}
+.reader-top {
+  width: min(100%, 960px);
+  margin-inline: auto;
+}
+.reader-footer-content {
+  width: min(100%, 800px);
+  margin-inline: auto;
+}
+.reader-message > p {
+  max-width: 34rem;
+}

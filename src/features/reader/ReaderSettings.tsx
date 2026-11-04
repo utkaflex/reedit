@@ -1,5 +1,8 @@
 import { useId, useState } from 'react';
-import type { ReaderPreferences } from '../../domain/reader';
+import {
+  defaultReaderPreferences,
+  type ReaderPreferences,
+} from '../../domain/reader';
 import { Dialog } from '../../ui/Dialog';
 import { Button } from '../../ui/Button';
 import { SegmentedControl } from '../../ui/SegmentedControl';
@@ -191,6 +194,15 @@ export function ReaderSettings({
             {error}
           </p>
         )}
+        <Button
+          variant="quiet"
+          disabled={busy}
+          onClick={() => {
+            setDraft({ ...defaultReaderPreferences });
+          }}
+        >
+          Стандартное оформление
+        </Button>
         <Button type="submit" disabled={busy || navigationBusy}>
           {busy ? 'Применяем…' : 'Применить оформление'}
         </Button>

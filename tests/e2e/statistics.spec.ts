@@ -1,3 +1,4 @@
+import { libraryAction } from '../fixtures/library-actions';
 import { expect, test, type Page } from '@playwright/test';
 import { makeEpubFixture } from '../fixtures/epub';
 
@@ -74,6 +75,7 @@ test('бумажная книга, годовая цель и дневник с�
     .fill('Личный отзыв о бумажной книге.');
   await page.getByRole('button', { name: 'Сохранить прочтение' }).click();
   await page.getByLabel('Год', { exact: true }).selectOption('2026');
+  await page.locator('.goal-editor > summary').click();
   await page.getByLabel('Книг за год', { exact: true }).fill('12');
   await page.getByRole('button', { name: 'Сохранить цель' }).click();
   await expect(page.getByText('1 из 12 книг', { exact: true })).toBeVisible();
@@ -142,8 +144,8 @@ test('время и слова трёх режимов сохраняются; �
     toc: [0],
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Импорт EPUB', exact: true }).click();
-  await page.getByLabel('Файл EPUB', { exact: true }).setInputFiles({
+  await libraryAction(page, 'upload');
+  await page.getByLabel('Файл книги', { exact: true }).setInputFiles({
     name: 'stats.epub',
     mimeType: 'application/epub+zip',
     buffer: Buffer.from(fixture.bytes),

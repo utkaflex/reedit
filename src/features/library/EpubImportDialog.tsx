@@ -14,7 +14,7 @@ import { formatCount } from '../../ui/format';
 
 export function EpubImportDialog({
   adapter,
-  format = 'epub',
+  format = 'auto',
   store,
   books,
   target,
@@ -22,14 +22,17 @@ export function EpubImportDialog({
   onSaved,
 }: {
   adapter: EpubAdapter;
-  format?: 'epub' | 'fb2';
+  format?: 'epub' | 'fb2' | 'auto';
   store: LocalStore;
   books: Book[];
   target: Id | null;
   onClose: () => void;
   onSaved: (id: Id) => Promise<void>;
 }) {
-  const label = format === 'fb2' ? 'FB2' : 'EPUB';
+  const [detected, setDetected] = useState<'epub' | 'fb2' | 'auto'>(format);
+  const label =
+    detected === 'auto' ? 'EPUB или FB2' : detected === 'fb2' ? 'FB2' : 'EPUB';
+  const [size, setSize] = useState(0);
   const controller = useRef<AbortController | null>(null);
   const [phase, setPhase] = useState<
     'choose' | 'working' | 'review' | 'saving' | 'duplicate' | 'cancelled'
@@ -55,7 +58,15 @@ export function EpubImportDialog({
   );
   const choose = async (file: File | undefined) => {
     if (!file || lock.current) return;
-    if (!(format === 'fb2' ? /\.fb2$/i : /\.epub$/i).test(file.name)) {
+    if (
+      !(
+        format === 'auto'
+          ? /\.(epub|fb2)$/i
+          : format === 'fb2'
+            ? /\.fb2$/i
+            : /\.epub$/i
+      ).test(file.name)
+    ) {
       setError(`Выберите файл ${label}.`);
       return;
     }
@@ -63,6 +74,8 @@ export function EpubImportDialog({
     controller.current?.abort();
     const task = new AbortController();
     controller.current = task;
+    setDetected(/\.fb2$/i.test(file.name) ? 'fb2' : 'epub');
+    setSize(file.size);
     setName(file.name);
     setPhase('working');
     setError(null);
@@ -151,22 +164,66 @@ export function EpubImportDialog({
     } else onClose();
   };
   return (
-    <Dialog open title={`Импорт ${label}`} onClose={cancel}>
+    <Dialog
+      open
+      presentation="panel"
+      className="import-dialog"
+      title={`Импорт ${label}`}
+      onClose={cancel}
+      footer={
+        <div className="form-actions">
+          {phase === 'review' && (
+            <Button
+              onClick={() => {
+                void save();
+              }}
+              disabled={!title.trim() && bookId === 'new'}
+            >
+              {bookId === 'new'
+                ? `Создать книгу и сохранить ${label}`
+                : `Прикрепить ${label}`}
+            </Button>
+          )}
+          <Button variant="quiet" onClick={cancel}>
+            {busy ? 'Отменить импорт' : 'Закрыть импорт'}
+          </Button>
+        </div>
+      }
+    >
       <div className="form-stack">
         <p className="caption">
           Файл обрабатывается и хранится только на этом устройстве. На сервер он
           не отправляется.
         </p>
         {!busy && (
-          <div className="field">
-            <label htmlFor="epub-file">Файл {label}</label>
+          <div
+            className="field"
+            onDragOver={(event) => {
+              event.preventDefault();
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              void choose(event.dataTransfer.files[0]);
+            }}
+          >
+            <label
+              className="file-drop-zone"
+              data-selected={Boolean(name)}
+              htmlFor="epub-file"
+            >
+              {name ? 'Выбрать другой файл' : 'Выбрать EPUB или FB2'}
+            </label>
             <input
               id="epub-file"
+              className="visually-hidden"
+              aria-label="Файл книги"
               type="file"
               accept={
-                format === 'fb2'
-                  ? '.fb2,application/x-fictionbook+xml,text/xml,application/xml'
-                  : '.epub,application/epub+zip'
+                format === 'auto'
+                  ? '.epub,.fb2,application/epub+zip,application/x-fictionbook+xml'
+                  : format === 'fb2'
+                    ? '.fb2,application/x-fictionbook+xml,text/xml,application/xml'
+                    : '.epub,application/epub+zip'
               }
               onChange={(event) => {
                 void choose(event.target.files?.[0]);
@@ -174,13 +231,20 @@ export function EpubImportDialog({
               }}
             />
             <p className="caption">
-              {format === 'fb2'
+              {detected === 'fb2'
                 ? 'До 16 МБ. Оригинал FB2 хранится локально; для чтения создаётся локальный EPUB.'
                 : 'До 32 МБ. EPUB 2 и EPUB 3 без DRM и активных скриптов.'}
             </p>
           </div>
         )}
-        {name && <p className="caption import-hash">Выбран файл: {name}</p>}
+        {name && (
+          <p className="caption import-hash">
+            Выбран файл: {name} ·{' '}
+            {size >= 1048576
+              ? `${(size / 1048576).toFixed(1)} МБ`
+              : `${String(Math.ceil(size / 1024))} КБ`}
+          </p>
+        )}
         {busy && (
           <p role="status" aria-live="polite">
             {progress}
@@ -198,8 +262,8 @@ export function EpubImportDialog({
           <div className="form-stack">
             <h3>Этот файл уже в библиотеке</h3>
             <p>
-              SHA-256 совпадает. Новые книги, файлы и прочтения не созданы;
-              существующие записи не изменены.
+              Книга уже сохранена. Откройте её — ваши записи и место чтения на
+              месте.
             </p>
             {existing && (
               <Button
@@ -246,40 +310,46 @@ export function EpubImportDialog({
               <br />
               {analysis.metadata.authors.join(', ') || 'Автор не указан'}
             </p>
-            <p className="caption">
-              Язык: {analysis.metadata.language || 'не указан'} · {label}{' '}
-              {format === 'epub' ? analysis.version : ''}
-            </p>
-            <p className="caption">
-              {formatCount(analysis.sections.length, [
-                'линейный ресурс',
-                'линейных ресурса',
-                'линейных ресурсов',
-              ])}{' '}
-              ·{' '}
-              {formatCount(
-                analysis.sections.reduce(
-                  (sum, section) => sum + section.wordCount,
-                  0,
-                ),
-                ['слово', 'слова', 'слов'],
-              )}
-              . Порядок проверен по spine; оглавление содержит{' '}
-              {formatCount(analysis.navigation.length, [
-                'раздел верхнего уровня',
-                'раздела верхнего уровня',
-                'разделов верхнего уровня',
-              ])}
-              .
-            </p>
-            {analysis.warnings.map((warning) => (
-              <p className="caption" key={warning}>
-                {warning}
-              </p>
-            ))}
-            <details>
-              <summary>SHA-256 оригинала</summary>
-              <p className="import-hash">{analysis.sha256}</p>
+            <details className="import-diagnostics">
+              <summary>Сведения о проверке файла</summary>
+              <div className="form-stack">
+                {' '}
+                <p className="caption">
+                  Язык: {analysis.metadata.language || 'не указан'} · {label}{' '}
+                  {detected === 'epub' ? analysis.version : ''}
+                </p>
+                <p className="caption">
+                  {formatCount(analysis.sections.length, [
+                    'линейный ресурс',
+                    'линейных ресурса',
+                    'линейных ресурсов',
+                  ])}{' '}
+                  ·{' '}
+                  {formatCount(
+                    analysis.sections.reduce(
+                      (sum, section) => sum + section.wordCount,
+                      0,
+                    ),
+                    ['слово', 'слова', 'слов'],
+                  )}
+                  . Порядок проверен по spine; оглавление содержит{' '}
+                  {formatCount(analysis.navigation.length, [
+                    'раздел верхнего уровня',
+                    'раздела верхнего уровня',
+                    'разделов верхнего уровня',
+                  ])}
+                  .
+                </p>
+                {analysis.warnings.map((warning) => (
+                  <p className="caption" key={warning}>
+                    {warning}
+                  </p>
+                ))}
+                <details>
+                  <summary>SHA-256 оригинала</summary>
+                  <p className="import-hash">{analysis.sha256}</p>
+                </details>
+              </div>
             </details>
             <SelectField
               label="Куда импортировать"
@@ -327,16 +397,8 @@ export function EpubImportDialog({
                 </span>
               </label>
             )}
-            <Button type="submit">
-              {bookId === 'new'
-                ? `Создать книгу и сохранить ${label}`
-                : `Прикрепить ${label}`}
-            </Button>
           </form>
         )}
-        <Button variant="secondary" onClick={cancel}>
-          {busy ? 'Отменить импорт' : 'Закрыть импорт'}
-        </Button>
       </div>
     </Dialog>
   );

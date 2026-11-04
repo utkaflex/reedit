@@ -1,3 +1,4 @@
+import { libraryAction } from '../fixtures/library-actions';
 import { expect, test, type Page } from '@playwright/test';
 import { makeEpubFixture } from '../fixtures/epub';
 
@@ -12,8 +13,8 @@ async function open(page: Page) {
     ],
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Импорт EPUB', exact: true }).click();
-  await page.getByLabel('Файл EPUB', { exact: true }).setInputFiles({
+  await libraryAction(page, 'upload');
+  await page.getByLabel('Файл книги', { exact: true }).setInputFiles({
     name: 'notes.epub',
     mimeType: 'application/epub+zip',
     buffer: Buffer.from(fixture.bytes),
@@ -159,6 +160,7 @@ test('цитата, комментарий, цвет, закладка, эксп
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Экспорт Markdown' }).click();
   expect((await download).suggestedFilename()).toBe('reedit-quotes.md');
+  await page.locator('.notes-filter-disclosure > summary').click();
   await page.getByLabel('Цвет', { exact: true }).selectOption('rose');
   await expect(page.locator('.saved-fragment')).toHaveCount(0);
   await page.getByLabel('Цвет', { exact: true }).selectOption('green');
@@ -213,7 +215,7 @@ test('аннотации остаются после удаления файла
   await page.getByRole('button', { name: 'Закрыть книгу' }).click();
   await page
     .getByRole('list', { name: 'Книги библиотеки' })
-    .getByRole('button', { name: /Книга с цитатами/ })
+    .getByRole('button', { name: /^Книга с цитатами/ })
     .click();
   await page.getByText('Файлы и издания', { exact: true }).click();
   await page.getByRole('button', { name: 'Убрать файл', exact: true }).click();
@@ -232,12 +234,12 @@ test('аннотации остаются после удаления файла
   await page.getByRole('link', { name: 'Библиотека', exact: true }).click();
   await page
     .getByRole('list', { name: 'Книги библиотеки' })
-    .getByRole('button', { name: /Книга с цитатами/ })
+    .getByRole('button', { name: /^Книга с цитатами/ })
     .click();
   await page
     .getByRole('button', { name: 'Прикрепить EPUB', exact: true })
     .click();
-  await page.getByLabel('Файл EPUB', { exact: true }).setInputFiles({
+  await page.getByLabel('Файл книги', { exact: true }).setInputFiles({
     name: 'same.epub',
     mimeType: 'application/epub+zip',
     buffer: Buffer.from(fixture.bytes),

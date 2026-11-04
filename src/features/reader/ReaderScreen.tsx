@@ -43,6 +43,7 @@ export function ReaderScreen({
   );
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [fatal, setFatal] = useState('');
+  const [slow, setSlow] = useState(false);
   const [preparation, setPreparation] = useState('Подготавливаем книгу…');
   const preparationStage = useRef('Подготавливаем книгу…');
   const [notice, setNotice] = useState<string | null>(null);
@@ -133,6 +134,9 @@ export function ReaderScreen({
   }, [preferences.theme]);
   useEffect(() => {
     const abort = new AbortController();
+    const slowTimer = setTimeout(() => {
+      setSlow(true);
+    }, 15000);
     let completed = false;
     const openingTimer = setTimeout(() => {
       if (completed || abort.signal.aborted) return;
@@ -153,7 +157,11 @@ export function ReaderScreen({
     writer.current = positions;
     const start = async () => {
       try {
-        const data = await loadReader(store, address);
+        const data = await loadReader(store, address, {
+          ...defaultReaderPreferences,
+          fontSize: window.innerWidth >= 900 ? 22 : 20,
+          lineHeight: 1.7,
+        });
         if (isCancelled() || !host.current) return;
         setTitle(data.book.title);
         setIndex(data.index);
@@ -213,6 +221,7 @@ export function ReaderScreen({
         setState('ready');
         completed = true;
         clearTimeout(openingTimer);
+        clearTimeout(slowTimer);
         const documentIndex = current.getTextIndex?.();
         if (documentIndex) {
           try {
@@ -256,6 +265,7 @@ export function ReaderScreen({
       } catch (error) {
         completed = true;
         clearTimeout(openingTimer);
+        clearTimeout(slowTimer);
         if (!abort.signal.aborted) {
           setFatal(
             error instanceof Error
@@ -274,6 +284,7 @@ export function ReaderScreen({
     void start();
     return () => {
       clearTimeout(openingTimer);
+      clearTimeout(slowTimer);
       abort.abort();
       current?.destroy();
       session.current = null;
@@ -423,7 +434,27 @@ export function ReaderScreen({
         )}
         {state === 'loading' && (
           <div className="reader-message" role="status">
-            {preparation}
+            <span>{preparation}</span>
+            {slow && (
+              <>
+                <p className="caption">
+                  Подготовка занимает больше обычного. Можно подождать или
+                  вернуться — файл и сохранённое место останутся в библиотеке.
+                </p>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setSlow(false);
+                    setRetry((value) => value + 1);
+                  }}
+                >
+                  Повторить
+                </Button>
+                <a className="button button--quiet" href="#/library">
+                  В библиотеку
+                </a>
+              </>
+            )}
           </div>
         )}
         {state === 'error' && (
@@ -538,7 +569,15 @@ export function ReaderScreen({
                 >
                   <Icon name="back" />
                 </Button>
-                <span className="reader-save-state" role="status">
+                <Button
+                  variant="quiet"
+                  className="reader-save-state"
+                  aria-label="Скрыть панели"
+                  title="Скрыть панели. Коснитесь центра страницы, чтобы вернуть их."
+                  onClick={() => {
+                    setControls(false);
+                  }}
+                >
                   {state === 'loading'
                     ? 'Открываем книгу…'
                     : state === 'error'
@@ -550,7 +589,7 @@ export function ReaderScreen({
                           : saving === 'error'
                             ? 'Позиция не сохранена'
                             : 'Позиция сохранена'}
-                </span>
+                </Button>
                 <Button
                   variant="quiet"
                   aria-label={
@@ -675,6 +714,7 @@ export function ReaderScreen({
       {panel === 'contents' && index && (
         <ReaderContents
           index={index}
+          currentPath={location?.path}
           onClose={() => {
             setPanel(null);
           }}

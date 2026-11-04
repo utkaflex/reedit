@@ -1,10 +1,11 @@
+import { libraryAction } from '../fixtures/library-actions';
 import { expect, test, type Page } from '@playwright/test';
 import { makeFb2Fixture, expectedFb2Parts } from '../fixtures/fb2';
 import { makeEpubFixture } from '../fixtures/epub';
 
 async function importFb2(page: Page, source = makeFb2Fixture().source) {
-  await page.getByRole('button', { name: 'Импорт FB2', exact: true }).click();
-  await page.getByLabel('Файл FB2', { exact: true }).setInputFiles({
+  await libraryAction(page, 'upload');
+  await page.getByLabel('Файл книги', { exact: true }).setInputFiles({
     name: 'book.fb2',
     mimeType: 'application/x-fictionbook+xml',
     buffer: Buffer.from(source),
@@ -110,7 +111,7 @@ test('FB2: оригинал, изображения, примечания и о�
   await page.reload();
   await page
     .getByRole('list', { name: 'Книги библиотеки' })
-    .getByRole('button', { name: /Синтетическая книга FB2/ })
+    .getByRole('button', { name: /^Синтетическая книга FB2/ })
     .click();
   await page
     .getByRole('button', { name: 'Читать файл book.fb2', exact: true })
@@ -135,8 +136,8 @@ test('FB2: оригинал, изображения, примечания и о�
       text,
     })),
   });
-  await page.getByRole('button', { name: 'Импорт EPUB', exact: true }).click();
-  await page.getByLabel('Файл EPUB', { exact: true }).setInputFiles({
+  await libraryAction(page, 'upload');
+  await page.getByLabel('Файл книги', { exact: true }).setInputFiles({
     name: 'same.epub',
     mimeType: 'application/epub+zip',
     buffer: Buffer.from(epub.bytes),

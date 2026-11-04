@@ -1,3 +1,4 @@
+import { libraryAction } from '../fixtures/library-actions';
 import { expect, test } from '@playwright/test';
 import { makeEpubFixture } from '../fixtures/epub';
 
@@ -6,8 +7,8 @@ test('зависший движок показывает ошибку с пов�
 }) => {
   const fixture = await makeEpubFixture({ title: 'Проверка зависания' });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Импорт EPUB', exact: true }).click();
-  await page.getByLabel('Файл EPUB', { exact: true }).setInputFiles({
+  await libraryAction(page, 'upload');
+  await page.getByLabel('Файл книги', { exact: true }).setInputFiles({
     name: 'deadline.epub',
     mimeType: 'application/epub+zip',
     buffer: Buffer.from(fixture.bytes),
@@ -54,6 +55,10 @@ test('зависший движок показывает ошибку с пов�
   await expect(
     page.getByRole('button', { name: 'Повторить открытие' }),
   ).toBeVisible();
+  await page.screenshot({
+    path: test.info().outputPath('opening-error.png'),
+    scale: 'css',
+  });
   await page.getByRole('link', { name: 'К библиотеке', exact: true }).click();
   await expect
     .poll(() =>
@@ -70,30 +75,23 @@ for (const width of [320, 390]) {
   }) => {
     await page.setViewportSize({ width, height: 844 });
     await page.goto('/');
-    const actions = page.locator('.library-actions .action-row');
     await expect(
-      actions.getByRole('button', { name: 'Найти в каталогах', exact: true }),
+      page.getByRole('button', { name: 'Добавить', exact: true }),
+    ).toBeEnabled();
+    await expect(
+      page.getByRole('button', { name: 'Загрузить EPUB или FB2', exact: true }),
     ).toBeVisible();
-    const buttons = await actions.getByRole('button').evaluateAll((elements) =>
-      elements.map((element) => ({
-        width: element.getBoundingClientRect().width,
-        height: element.getBoundingClientRect().height,
-      })),
-    );
-    expect(
-      buttons.every(
-        (button) =>
-          button.width >= 115 && button.height >= 44 && button.height < 110,
-      ),
-    ).toBe(true);
     for (const route of ['quotes', 'statistics']) {
       await page.goto(`/#/${route}`);
       await expect(page.locator(`.page--${route}`)).toBeVisible();
-      await expect(
-        page.getByLabel(route === 'quotes' ? 'Созданы с' : 'Год', {
-          exact: true,
-        }),
-      ).toBeVisible();
+      if (route === 'statistics')
+        await expect(page.getByLabel('Год', { exact: true })).toBeVisible();
+      else
+        await expect(
+          page.getByRole('heading', {
+            name: 'Слова, к которым хочется вернуться',
+          }),
+        ).toBeVisible();
       await expect
         .poll(() =>
           page.evaluate(
@@ -111,7 +109,7 @@ for (const width of [320, 390]) {
             );
           }),
         );
-      expect(fields.length).toBeGreaterThan(0);
+      if (route === 'statistics') expect(fields.length).toBeGreaterThan(0);
       expect(fields.every(Boolean)).toBe(true);
       await page.screenshot({
         path: test.info().outputPath(`${route}.png`),

@@ -5,10 +5,12 @@ import { Dialog } from '../../ui/Dialog';
 import { Button } from '../../ui/Button';
 export function ReaderContents({
   index,
+  currentPath,
   onClose,
   onNavigate,
 }: {
   index: EpubIndex;
+  currentPath?: string | undefined;
   onClose: () => void;
   onNavigate: (target: ReaderTarget) => void;
 }) {
@@ -18,6 +20,7 @@ export function ReaderContents({
         <li key={`${item.path}#${item.fragment}-${String(number)}`}>
           <Button
             variant="quiet"
+            aria-current={item.path === currentPath ? 'location' : undefined}
             onClick={() => {
               onNavigate(item);
             }}

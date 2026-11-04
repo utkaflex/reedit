@@ -1,3 +1,4 @@
+import { libraryAction } from '../fixtures/library-actions';
 import { expect, test, type Page } from '@playwright/test';
 import { makeEpubFixture, type FixtureOptions } from '../fixtures/epub';
 import type { RoundtripResult } from '../fixtures/position-harness';
@@ -22,8 +23,8 @@ async function openBook(page: Page, options: FixtureOptions = {}) {
     ...options,
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Импорт EPUB', exact: true }).click();
-  await page.getByLabel('Файл EPUB', { exact: true }).setInputFiles({
+  await libraryAction(page, 'upload');
+  await page.getByLabel('Файл книги', { exact: true }).setInputFiles({
     name: 'reader.epub',
     mimeType: 'application/epub+zip',
     buffer: Buffer.from(fixture.bytes),
@@ -206,7 +207,7 @@ test('страницы: мобильное открытие, перелисты�
   await expect(page.locator('iframe')).toHaveCount(0);
   await page
     .getByRole('list', { name: 'Книги библиотеки' })
-    .getByRole('button', { name: /Длинная книга для чтения/ })
+    .getByRole('button', { name: /^Длинная книга для чтения/ })
     .click();
   await page
     .getByRole('button', { name: 'Читать файл reader.epub', exact: true })
@@ -332,7 +333,7 @@ test('оформление, поворот экрана, прокрутка и �
   await page.reload();
   await page
     .getByRole('list', { name: 'Книги библиотеки' })
-    .getByRole('button', { name: /Длинная книга для чтения/ })
+    .getByRole('button', { name: /^Длинная книга для чтения/ })
     .click();
   await page
     .getByRole('button', { name: 'Читать файл reader.epub', exact: true })

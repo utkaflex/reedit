@@ -1,3 +1,4 @@
+import { libraryAction } from '../fixtures/library-actions';
 import { expect, test, type Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { makeEpubFixture } from '../fixtures/epub';
@@ -126,13 +127,14 @@ test('импорт всей книги, оригинал и SHA-256 пережи
       outbound.push(request.url());
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Импорт EPUB', exact: true }).click();
+  await libraryAction(page, 'upload');
   const upload = {
     name: 'synthetic.epub',
     mimeType: 'application/epub+zip',
     buffer: Buffer.from(fixture.bytes),
   };
-  await page.getByLabel('Файл EPUB', { exact: true }).setInputFiles(upload);
+  await page.getByLabel('Файл книги', { exact: true }).setInputFiles(upload);
+  await page.getByText('Сведения о проверке файла', { exact: true }).click();
   await expect(page.getByText(/3 линейных ресурса/)).toBeVisible();
   expect(await counts(page)).toEqual({
     books: 0,
@@ -163,9 +165,9 @@ test('импорт всей книги, оригинал и SHA-256 пережи
   expect(data.hash).toBe(
     createHash('sha256').update(fixture.bytes).digest('hex'),
   );
-  await page.getByRole('button', { name: 'Импорт EPUB', exact: true }).click();
+  await libraryAction(page, 'upload');
   await page
-    .getByLabel('Файл EPUB', { exact: true })
+    .getByLabel('Файл книги', { exact: true })
     .setInputFiles({ ...upload, name: 'renamed.epub' });
   await expect(
     page.getByRole('heading', { name: 'Этот файл уже в библиотеке' }),
@@ -184,9 +186,7 @@ test('прикрепление к существующей книге сохра
 }) => {
   const fixture = await makeEpubFixture({ version: '2' });
   await page.goto('/');
-  await page
-    .getByRole('button', { name: 'Добавить книгу', exact: true })
-    .click();
+  await libraryAction(page, 'manual');
   await page.getByLabel('Название', { exact: true }).fill('Мои метаданные');
   await page.getByRole('button', { name: 'Добавить в библиотеку' }).click();
   await page.getByRole('button', { name: 'Изменить прочтение 1' }).click();
@@ -197,11 +197,12 @@ test('прикрепление к существующей книге сохра
   await page
     .getByRole('button', { name: 'Прикрепить EPUB', exact: true })
     .click();
-  await page.getByLabel('Файл EPUB', { exact: true }).setInputFiles({
+  await page.getByLabel('Файл книги', { exact: true }).setInputFiles({
     name: 'epub2.epub',
     mimeType: 'application/epub+zip',
     buffer: Buffer.from(fixture.bytes),
   });
+  await page.getByText('Сведения о проверке файла', { exact: true }).click();
   await expect(page.getByText(/1 линейный ресурс/)).toBeVisible();
   await expect(page.getByLabel('Куда импортировать')).not.toHaveValue('new');
   await page
@@ -225,14 +226,14 @@ test('DRM, повреждение и скрипты отклоняются бе�
   page,
 }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Импорт EPUB', exact: true }).click();
+  await libraryAction(page, 'upload');
   for (const options of [
     { drm: true },
     { missingChapter: 0 },
     { unsafeMarkup: '<script>globalThis.epubUnsafe = true</script>' },
   ]) {
     const fixture = await makeEpubFixture(options);
-    await page.getByLabel('Файл EPUB', { exact: true }).setInputFiles({
+    await page.getByLabel('Файл книги', { exact: true }).setInputFiles({
       name: 'bad.epub',
       mimeType: 'application/epub+zip',
       buffer: Buffer.from(fixture.bytes),
@@ -259,8 +260,8 @@ test('отмена во время анализа и до сохранения �
     toc: [0],
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Импорт EPUB', exact: true }).click();
-  await page.getByLabel('Файл EPUB', { exact: true }).setInputFiles({
+  await libraryAction(page, 'upload');
+  await page.getByLabel('Файл книги', { exact: true }).setInputFiles({
     name: 'cancel.epub',
     mimeType: 'application/epub+zip',
     buffer: Buffer.from(fixture.bytes),
@@ -280,7 +281,7 @@ test('отмена во время анализа и до сохранения �
     epubIndexes: 0,
   });
   const small = await makeEpubFixture();
-  await page.getByLabel('Файл EPUB', { exact: true }).setInputFiles({
+  await page.getByLabel('Файл книги', { exact: true }).setInputFiles({
     name: 'review.epub',
     mimeType: 'application/epub+zip',
     buffer: Buffer.from(small.bytes),

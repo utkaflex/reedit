@@ -13,6 +13,7 @@ import {
   exportAnnotations,
 } from '../../services/annotations';
 import { readerUrl } from '../shell/navigation';
+import { EmptyState } from '../../ui/EmptyState';
 import { Button } from '../../ui/Button';
 import { Dialog } from '../../ui/Dialog';
 import { SelectField, TextArea } from '../../ui/FormControls';
@@ -176,73 +177,110 @@ export function SavedNotes({
       className="saved-notes form-stack"
       aria-label="Сохранённые фрагменты"
     >
-      <div className="notes-filters">
-        <TextField
-          label="Поиск цитат и заметок"
-          type="search"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-          }}
-        />
-        <SelectField
-          label="Книга"
-          value={book}
-          onChange={(e) => {
-            setBook(e.target.value);
-          }}
-        >
-          <option value="">Все книги</option>
-          {data?.books.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.title}
-            </option>
-          ))}
-        </SelectField>
-        <SelectField
-          label="Показывать"
-          value={kind}
-          onChange={(e) => {
-            setKind(e.target.value);
-            setColor('');
-          }}
-        >
-          <option value="quotes">Цитаты и заметки</option>
-          <option value="bookmarks">Закладки</option>
-        </SelectField>
-        {kind === 'quotes' && (
-          <SelectField
-            label="Цвет"
-            value={color}
+      {data && (data.notes.length > 0 || data.bookmarks.length > 0) && (
+        <div className="notes-toolbar">
+          <TextField
+            label="Поиск цитат и заметок"
+            type="search"
+            value={query}
             onChange={(e) => {
-              setColor(e.target.value);
+              setQuery(e.target.value);
+            }}
+          />
+          <SelectField
+            label="Показывать"
+            value={kind}
+            onChange={(e) => {
+              setKind(e.target.value);
+              setColor('');
             }}
           >
-            <option value="">Все цвета</option>
-            {Object.entries(highlightColors).map(([key, item]) => (
-              <option key={key} value={key}>
-                {item.label}
-              </option>
-            ))}
+            <option value="quotes">Цитаты и заметки</option>
+            <option value="bookmarks">Закладки</option>
           </SelectField>
-        )}
-        <TextField
-          label="Созданы с"
-          type="date"
-          value={after}
-          onChange={(e) => {
-            setAfter(e.target.value);
-          }}
-        />
-        <TextField
-          label="Созданы по"
-          type="date"
-          value={before}
-          onChange={(e) => {
-            setBefore(e.target.value);
-          }}
-        />
-      </div>
+          <details className="notes-filter-disclosure">
+            <summary>
+              Фильтры{book || color || after || before ? ' · применены' : ''}
+            </summary>
+            <div className="notes-filters">
+              {' '}
+              <SelectField
+                label="Книга"
+                value={book}
+                onChange={(e) => {
+                  setBook(e.target.value);
+                }}
+              >
+                <option value="">Все книги</option>
+                {data.books.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.title}
+                  </option>
+                ))}
+              </SelectField>
+              {kind === 'quotes' && (
+                <SelectField
+                  label="Цвет"
+                  value={color}
+                  onChange={(e) => {
+                    setColor(e.target.value);
+                  }}
+                >
+                  <option value="">Все цвета</option>
+                  {Object.entries(highlightColors).map(([key, item]) => (
+                    <option key={key} value={key}>
+                      {item.label}
+                    </option>
+                  ))}
+                </SelectField>
+              )}
+              <TextField
+                label="Созданы с"
+                type="date"
+                value={after}
+                onChange={(e) => {
+                  setAfter(e.target.value);
+                }}
+              />
+              <TextField
+                label="Созданы по"
+                type="date"
+                value={before}
+                onChange={(e) => {
+                  setBefore(e.target.value);
+                }}
+              />
+            </div>
+          </details>
+          {(query || book || color || after || before) && (
+            <div className="active-filters">
+              <span>
+                {[
+                  query,
+                  data.books.find((b) => b.id === book)?.title,
+                  color ? highlightColors[color as HighlightColor].label : '',
+                  after,
+                  before,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+              <Button
+                variant="quiet"
+                onClick={() => {
+                  setQuery('');
+                  setBook('');
+                  setColor('');
+                  setAfter('');
+                  setBefore('');
+                }}
+              >
+                Сбросить фильтры
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
       {error && (
         <div role="alert">
           <p>{error}</p>
@@ -258,11 +296,23 @@ export function SavedNotes({
       )}
       {!data && !error && <p role="status">Загружаем заметки…</p>}
       {data && filtered.length === 0 && (
-        <p className="caption">
-          {items.length
-            ? 'Нет фрагментов с такими условиями.'
-            : 'Здесь появятся ваши цитаты и закладки. Выделите текст во время чтения, чтобы сохранить фрагмент.'}
-        </p>
+        <EmptyState
+          icon="quote"
+          title={
+            items.length
+              ? 'Нет подходящих фрагментов'
+              : 'Слова, к которым хочется вернуться'
+          }
+        >
+          <p>
+            {items.length
+              ? 'Измените условия поиска или сбросьте фильтры.'
+              : 'Выделите текст в книге, чтобы сохранить цитату. Добавьте к ней свою мысль — она останется рядом.'}
+          </p>
+          <a className="button button--secondary" href="#/library">
+            К библиотеке
+          </a>
+        </EmptyState>
       )}
       {kind === 'quotes' && filtered.length > 0 && (
         <div className="notes-actions">
@@ -291,6 +341,7 @@ export function SavedNotes({
       )}
       <ul className="notes-list">
         {filtered.map((item) => {
+          const source = data?.books.find((book) => book.id === item.bookId);
           const file = data?.files.find(
             (file) =>
               file.id === item.bookFileId &&
@@ -318,6 +369,9 @@ export function SavedNotes({
                   {new Date(item.createdAt).toLocaleDateString('ru')}
                 </time>
               </p>
+              {source && source.authors.length > 0 && (
+                <p className="caption">{source.authors.join(', ')}</p>
+              )}
               {'quote' in item ? (
                 <>
                   <blockquote>{item.quote}</blockquote>

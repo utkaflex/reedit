@@ -117,18 +117,6 @@ export function BookEditor({
       >
         <fieldset disabled={busy} className="form-stack form-fieldset">
           <TextField
-            label="Издательство"
-            name="publisher"
-            defaultValue={book?.publisher ?? ''}
-            maxLength={500}
-          />
-          <TextField
-            label="Год или дата издания"
-            name="publishedDate"
-            defaultValue={book?.publishedDate ?? ''}
-            maxLength={100}
-          />
-          <TextField
             label="Название"
             name="title"
             defaultValue={book?.title ?? ''}
@@ -154,6 +142,18 @@ export function BookEditor({
             defaultValue={book?.genres.join(', ') ?? ''}
             hint="Через запятую"
             maxLength={2000}
+          />
+          <TextField
+            label="Издательство"
+            name="publisher"
+            defaultValue={book?.publisher ?? ''}
+            maxLength={500}
+          />
+          <TextField
+            label="Год или дата издания"
+            name="publishedDate"
+            defaultValue={book?.publishedDate ?? ''}
+            maxLength={100}
           />
           <TextField
             label="ISBN (необязательно)"

@@ -1,12 +1,11 @@
+import { libraryAction } from '../fixtures/library-actions';
 import { expect, test } from '@playwright/test';
 
 test('удаление файла сохраняет книгу; редактирование и удаление коллекции не дублируют книги', async ({
   page,
 }) => {
   await page.goto('/');
-  await page
-    .getByRole('button', { name: 'Добавить книгу', exact: true })
-    .click();
+  await libraryAction(page, 'manual');
   await page
     .getByLabel('Название', { exact: true })
     .fill('Тест удаления файла');

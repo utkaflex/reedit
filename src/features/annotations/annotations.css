@@ -95,3 +95,52 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.notes-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 0.5fr);
+  gap: 16px;
+  align-items: end;
+}
+.notes-filter-disclosure {
+  grid-column: 1/-1;
+  border-bottom: 1px solid var(--color-border);
+}
+.notes-filter-disclosure > summary {
+  min-height: 44px;
+  align-content: center;
+  cursor: pointer;
+  color: var(--color-accent);
+  font-size: 13px;
+}
+.notes-filter-disclosure .notes-filters {
+  margin: 16px 0;
+}
+.saved-fragment {
+  background: var(--color-surface);
+  padding: 24px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+}
+.saved-fragment blockquote {
+  font-size: 22px;
+  line-height: 1.55;
+  margin-block: 20px;
+}
+.saved-comment {
+  background: var(--color-bg);
+  padding: 12px 16px;
+  font-size: 14px;
+  border-radius: 8px;
+}
+.saved-notes > .empty-state {
+  padding-block: 40px;
+}
+@media (max-width: 600px) {
+  .notes-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .saved-fragment {
+    padding: 20px 16px;
+  }
+}

@@ -9,6 +9,9 @@ import {
   statusLabels,
   type LibrarySort,
 } from '../../domain/library';
+import { Icon } from '../../ui/Icon';
+import { ContinueReading } from './ContinueReading';
+import type { ReadingPosition } from '../../domain/model';
 import { Button } from '../../ui/Button';
 import { Dialog } from '../../ui/Dialog';
 import { EmptyState } from '../../ui/EmptyState';
@@ -38,9 +41,14 @@ export function Library({
   epubAdapter: EpubAdapter;
   catalogProviders: CatalogProvider[];
 }) {
+  const [addOpen, setAddOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [positions, setPositions] = useState<ReadingPosition[]>([]);
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [importTarget, setImportTarget] = useState<Id | 'new' | null>(null);
-  const [importFormat, setImportFormat] = useState<'epub' | 'fb2'>('epub');
+  const [importFormat, setImportFormat] = useState<'epub' | 'fb2' | 'auto'>(
+    'auto',
+  );
   const [snapshot, setSnapshot] = useState<LibrarySnapshot | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(true);
@@ -64,12 +72,15 @@ export function Library({
   const generation = useRef(0);
   const reload = useCallback(() => {
     const token = ++generation.current;
-    return store
-      .readLibrary()
+    return Promise.all([
+      store.readLibrary(),
+      store.repositories.positions.list(),
+    ])
       .then(
-        (data) => {
+        ([data, savedPositions]) => {
           if (mounted.current && token === generation.current) {
             setSnapshot(data);
+            setPositions(savedPositions);
             setLoadError(null);
           }
         },
@@ -137,58 +148,34 @@ export function Library({
       <div className="library-actions">
         <p className="caption">
           {snapshot
-            ? `${formatCount(snapshot.books.length, ['книга', 'книги', 'книг'])} · на этом устройстве`
-            : 'Личная библиотека'}
+            ? formatCount(snapshot.books.length, ['книга', 'книги', 'книг'])
+            : 'Личная библиотека'}{' '}
+          <span className="local-label">· на этом устройстве</span>
         </p>
-        <div className="action-row">
-          <Button
-            variant="secondary"
-            disabled={!snapshot || Boolean(loadError)}
-            onClick={() => {
-              setCatalogOpen(true);
-            }}
-          >
-            Найти в каталогах
-          </Button>
-          <Button
-            variant="secondary"
-            disabled={!snapshot || Boolean(loadError)}
-            onClick={() => {
-              setImportFormat('epub');
-              setImportTarget('new');
-            }}
-          >
-            Импорт EPUB
-          </Button>
-          <Button
-            variant="secondary"
-            disabled={!snapshot || Boolean(loadError)}
-            onClick={() => {
-              setImportFormat('fb2');
-              setImportTarget('new');
-            }}
-          >
-            Импорт FB2
-          </Button>
-          <Button
-            variant="secondary"
-            disabled={!snapshot || Boolean(loadError)}
-            onClick={() => {
-              setCollectionsOpen(true);
-            }}
-          >
-            Коллекции
-          </Button>
-          <Button
-            disabled={!snapshot || Boolean(loadError)}
-            onClick={() => {
-              setBookEditor('new');
-            }}
-          >
-            Добавить книгу
-          </Button>
-        </div>
+        <Button
+          disabled={!snapshot || Boolean(loadError)}
+          onClick={() => {
+            setAddOpen(true);
+          }}
+        >
+          <Icon name="plus" />
+          Добавить
+        </Button>
       </div>
+      {error && !selectedBook && (
+        <p className="error-text" role="alert">
+          {error} Повторите действие.
+        </p>
+      )}
+      {snapshot && (
+        <ContinueReading
+          snapshot={snapshot}
+          positions={positions}
+          onRead={(bookId, fileId, readingId) => {
+            window.location.hash = readerUrl({ bookId, fileId, readingId });
+          }}
+        />
+      )}
       {loadError && (
         <div className="surface form-stack error-surface">
           <p role="alert">{loadError}</p>
@@ -211,91 +198,180 @@ export function Library({
       {!snapshot && !loadError && <p role="status">Загружаем библиотеку…</p>}
       {snapshot && (
         <>
-          <div className="library-toolbar">
-            <TextField
-              label="Поиск по библиотеке"
-              type="search"
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
-              }}
-              placeholder="Название, автор, жанр или ISBN"
-            />
-            <details className="library-filters">
-              <summary>
-                Фильтры и сортировка
-                {(status !== 'all' ||
-                  selectedCollection ||
-                  sort !== 'newest') && (
-                  <span className="caption"> · применены</span>
+          {snapshot.books.length > 0 && (
+            <>
+              <div className="library-toolbar">
+                <TextField
+                  label="Поиск по библиотеке"
+                  type="search"
+                  value={query}
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                  }}
+                  placeholder="Название, автор, жанр или ISBN"
+                />
+                <Button
+                  variant="quiet"
+                  onClick={() => {
+                    setCollectionsOpen(true);
+                  }}
+                >
+                  Коллекции
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setFiltersOpen(true);
+                  }}
+                >
+                  Фильтры и сортировка
+                  {(status !== 'all' ||
+                    selectedCollection ||
+                    sort !== 'newest') && <span> · применены</span>}
+                </Button>
+                {filtersOpen && (
+                  <Dialog
+                    open
+                    presentation="panel"
+                    title="Фильтры и сортировка"
+                    onClose={() => {
+                      setFiltersOpen(false);
+                    }}
+                    footer={
+                      <Button
+                        onClick={() => {
+                          setFiltersOpen(false);
+                        }}
+                      >
+                        Показать книги
+                      </Button>
+                    }
+                  >
+                    <div className="filter-fields">
+                      <SelectField
+                        label="Статус книги"
+                        value={status}
+                        onChange={(event) => {
+                          setStatus(event.target.value);
+                        }}
+                      >
+                        <option value="all">Все статусы</option>
+                        {Object.entries(statusLabels).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </SelectField>
+                      <SelectField
+                        label="Коллекция"
+                        value={selectedCollection?.id ?? 'all'}
+                        onChange={(event) => {
+                          setCollectionId(event.target.value);
+                        }}
+                      >
+                        <option value="all">Все книги</option>
+                        {snapshot.collections.map((collection) => (
+                          <option key={collection.id} value={collection.id}>
+                            {collection.name}
+                          </option>
+                        ))}
+                      </SelectField>
+                      <SelectField
+                        label="Сортировка"
+                        value={sort}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          if (
+                            value === 'newest' ||
+                            value === 'title' ||
+                            value === 'author' ||
+                            value === 'rating'
+                          )
+                            setSort(value);
+                        }}
+                      >
+                        <option value="newest">Сначала новые</option>
+                        <option value="title">По названию</option>
+                        <option value="author">По автору</option>
+                        <option value="rating">По оценке</option>
+                      </SelectField>
+                    </div>
+                  </Dialog>
                 )}
-              </summary>
-              <div className="filter-fields">
-                <SelectField
-                  label="Статус книги"
-                  value={status}
-                  onChange={(event) => {
-                    setStatus(event.target.value);
-                  }}
-                >
-                  <option value="all">Все статусы</option>
-                  {Object.entries(statusLabels).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </SelectField>
-                <SelectField
-                  label="Коллекция"
-                  value={selectedCollection?.id ?? 'all'}
-                  onChange={(event) => {
-                    setCollectionId(event.target.value);
-                  }}
-                >
-                  <option value="all">Все книги</option>
-                  {snapshot.collections.map((collection) => (
-                    <option key={collection.id} value={collection.id}>
-                      {collection.name}
-                    </option>
-                  ))}
-                </SelectField>
-                <SelectField
-                  label="Сортировка"
-                  value={sort}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    if (
-                      value === 'newest' ||
-                      value === 'title' ||
-                      value === 'author' ||
-                      value === 'rating'
-                    )
-                      setSort(value);
-                  }}
-                >
-                  <option value="newest">Сначала новые</option>
-                  <option value="title">По названию</option>
-                  <option value="author">По автору</option>
-                  <option value="rating">По оценке</option>
-                </SelectField>
               </div>
-            </details>
-          </div>
-          <div className="library-view-row">
-            <p role="status" className="caption">
-              {formatCount(books.length, ['книга', 'книги', 'книг'])} в подборке
-              {refreshing ? ' · Обновляем…' : ''}
-            </p>
-            <SegmentedControl
-              label="Вид библиотеки"
-              value={view}
-              options={[
-                { value: 'grid', label: 'Сетка' },
-                { value: 'list', label: 'Список' },
-              ]}
-              onChange={setView}
-            />
-          </div>
+              <div
+                className="library-status-tabs"
+                role="group"
+                aria-label="Быстрые статусы"
+              >
+                {(
+                  [
+                    ['all', 'Все'],
+                    ['active', 'Читаю'],
+                    ['planned', 'В планах'],
+                    ['finished', 'Прочитано'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <Button
+                    key={value}
+                    variant="quiet"
+                    aria-pressed={status === value}
+                    onClick={() => {
+                      setStatus(value);
+                    }}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+              <div className="library-view-row">
+                <p role="status" className="caption">
+                  {formatCount(books.length, ['книга', 'книги', 'книг'])} в
+                  подборке
+                  {refreshing ? ' · Обновляем…' : ''}
+                </p>
+                <SegmentedControl
+                  label="Вид библиотеки"
+                  value={view}
+                  options={[
+                    { value: 'grid', label: 'Сетка' },
+                    { value: 'list', label: 'Список' },
+                  ]}
+                  onChange={setView}
+                />
+              </div>
+              {(query ||
+                status !== 'all' ||
+                selectedCollection ||
+                sort !== 'newest') && (
+                <div className="active-filters">
+                  <span>
+                    {[
+                      query,
+                      status !== 'all'
+                        ? statusLabels[status as Reading['status']]
+                        : '',
+                      selectedCollection?.name,
+                      sort !== 'newest' ? 'Своя сортировка' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                  <Button
+                    variant="quiet"
+                    onClick={() => {
+                      setQuery('');
+                      setStatus('all');
+                      setCollectionId('all');
+                      setSort('newest');
+                    }}
+                  >
+                    Сбросить
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
           {books.length > 0 ? (
             <ul
               className={view === 'grid' ? 'book-grid' : 'book-list'}
@@ -306,6 +382,28 @@ export function Library({
                   key={book.id}
                   book={book}
                   reading={latestReading(snapshot.readings, book.id)}
+                  onRead={
+                    snapshot.files.some(
+                      (file) => file.bookId === book.id && file.sha256,
+                    )
+                      ? () => {
+                          const file = snapshot.files.find(
+                            (file) => file.bookId === book.id && file.sha256,
+                          );
+                          if (!file) return;
+                          void perform(async () => {
+                            const reading =
+                              latestReading(snapshot.readings, book.id) ??
+                              (await store.addReading(book.id));
+                            window.location.hash = readerUrl({
+                              bookId: book.id,
+                              fileId: file.id,
+                              readingId: reading.id,
+                            });
+                          });
+                        }
+                      : undefined
+                  }
                   list={view === 'list'}
                   onOpen={() => {
                     setError(null);
@@ -321,14 +419,47 @@ export function Library({
                 title={
                   snapshot.books.length === 0
                     ? 'Первая книга — начало истории'
-                    : 'Ничего не найдено'
+                    : selectedCollection?.bookIds.length === 0
+                      ? 'В коллекции пока нет книг'
+                      : 'Ничего не найдено'
                 }
               >
                 <p>
                   {snapshot.books.length === 0
-                    ? 'Добавьте книгу вручную. EPUB или FB2 можно прикрепить к ней в любое время.'
-                    : 'Попробуйте изменить поиск, статус или коллекцию.'}
+                    ? 'Загрузите свою книгу или начните с бумажной. Книги и записи остаются на этом устройстве.'
+                    : selectedCollection?.bookIds.length === 0
+                      ? 'Откройте коллекцию и выберите книги для неё.'
+                      : 'Попробуйте изменить поиск, статус или коллекцию.'}
                 </p>
+                {snapshot.books.length === 0 && (
+                  <div className="empty-library-actions">
+                    <Button
+                      onClick={() => {
+                        setImportFormat('auto');
+                        setImportTarget('new');
+                      }}
+                    >
+                      <Icon name="upload" />
+                      Загрузить EPUB или FB2
+                    </Button>
+                    <Button
+                      variant="quiet"
+                      onClick={() => {
+                        setCatalogOpen(true);
+                      }}
+                    >
+                      Найти в каталогах
+                    </Button>
+                    <Button
+                      variant="quiet"
+                      onClick={() => {
+                        setBookEditor('new');
+                      }}
+                    >
+                      Добавить вручную
+                    </Button>
+                  </div>
+                )}
                 {snapshot.books.length > 0 && (
                   <Button
                     variant="secondary"
@@ -342,9 +473,77 @@ export function Library({
                   </Button>
                 )}
               </EmptyState>
+              {snapshot.books.length === 0 && (
+                <div className="empty-collections">
+                  <Button
+                    variant="quiet"
+                    onClick={() => {
+                      setCollectionsOpen(true);
+                    }}
+                  >
+                    Коллекции
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </>
+      )}
+      {addOpen && (
+        <Dialog
+          open
+          presentation="panel"
+          title="Добавить в библиотеку"
+          onClose={() => {
+            setAddOpen(false);
+          }}
+        >
+          <div className="add-choices">
+            <Button
+              variant="quiet"
+              onClick={() => {
+                setAddOpen(false);
+                setImportFormat('auto');
+                setImportTarget('new');
+              }}
+            >
+              <Icon name="upload" />
+              <span>
+                <strong>Загрузить EPUB или FB2</strong>
+                <small>С устройства · файл останется у вас</small>
+              </span>
+              <Icon name="arrow" />
+            </Button>
+            <Button
+              variant="quiet"
+              onClick={() => {
+                setAddOpen(false);
+                setCatalogOpen(true);
+              }}
+            >
+              <Icon name="search" />
+              <span>
+                <strong>Найти в каталоге</strong>
+                <small>Название, автор или ISBN</small>
+              </span>
+              <Icon name="arrow" />
+            </Button>
+            <Button
+              variant="quiet"
+              onClick={() => {
+                setAddOpen(false);
+                setBookEditor('new');
+              }}
+            >
+              <Icon name="book" />
+              <span>
+                <strong>Добавить вручную</strong>
+                <small>В том числе бумажную книгу</small>
+              </span>
+              <Icon name="arrow" />
+            </Button>
+          </div>
+        </Dialog>
       )}
       {selectedBook && !confirmation && (
         <BookView

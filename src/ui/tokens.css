@@ -7,7 +7,7 @@
   --text-base: 1rem;
   --text-lg: 1.125rem;
   --text-xl: 1.5rem;
-  --text-title: clamp(2.5rem, 6vw, 3.75rem);
+  --text-title: clamp(2rem, 3.6vw, 3rem);
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -27,31 +27,33 @@
   --ease-standard: cubic-bezier(0.2, 0.7, 0.2, 1);
   --touch-target: 2.75rem;
   --nav-height: 4.5rem;
-  --rail-width: 15.5rem;
+  --rail-width: 13.5rem;
   --content-width: 64rem;
   --shadow-cover: 0 6px 14px rgb(0 0 0 / 0.12);
-  --color-bg: #f7f6f2;
-  --color-surface: #fffefa;
-  --color-subtle: #eeede7;
-  --color-text: #252a27;
-  --color-muted: #686c65;
-  --color-border: #dcdfd6;
-  --color-accent: #395c45;
-  --color-accent-soft: #e6ebe3;
+  --color-bg: #f4f1ea;
+  --color-surface: #fffcf6;
+  --color-subtle: #eae7df;
+  --color-text: #242822;
+  --color-muted: #62685f;
+  --color-control-border: #7a8175;
+  --color-border: #d7d8cf;
+  --color-accent: #294d3d;
+  --color-accent-soft: #e3eadd;
   --color-on-accent: #ffffff;
   --color-danger: #a32f35;
   --color-backdrop: rgb(14 20 16 / 0.4);
   color-scheme: light;
 }
 :root[data-theme='dark'] {
-  --color-bg: #191b19;
-  --color-surface: #222521;
-  --color-subtle: #2b2f29;
-  --color-text: #eeeee6;
-  --color-muted: #a5aca0;
-  --color-border: #3a4037;
-  --color-accent: #b5ceb0;
-  --color-accent-soft: #303e31;
+  --color-bg: #171b18;
+  --color-surface: #222822;
+  --color-subtle: #2a322b;
+  --color-text: #eeece3;
+  --color-muted: #b0b8ac;
+  --color-control-border: #879482;
+  --color-border: #3f4a41;
+  --color-accent: #acc8ad;
+  --color-accent-soft: #2d3d32;
   --color-on-accent: #192319;
   --color-danger: #ffa6a5;
   --color-backdrop: rgb(0 0 0 / 0.65);
@@ -59,14 +61,14 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']):not([data-theme='dark']) {
-    --color-bg: #191b19;
-    --color-surface: #222521;
-    --color-subtle: #2b2f29;
-    --color-text: #eeeee6;
-    --color-muted: #a5aca0;
-    --color-border: #3a4037;
-    --color-accent: #b5ceb0;
-    --color-accent-soft: #303e31;
+    --color-bg: #171b18;
+    --color-surface: #222822;
+    --color-subtle: #2a322b;
+    --color-text: #eeece3;
+    --color-muted: #b0b8ac;
+    --color-border: #3f4a41;
+    --color-accent: #acc8ad;
+    --color-accent-soft: #2d3d32;
     --color-on-accent: #192319;
     --color-danger: #ffa6a5;
     --color-backdrop: rgb(0 0 0 / 0.65);

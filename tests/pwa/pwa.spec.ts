@@ -1,3 +1,4 @@
+import { libraryAction } from '../fixtures/library-actions';
 import { expect, test, chromium, type Page } from '@playwright/test';
 import { readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
@@ -25,8 +26,8 @@ test('длинная русская книга: production-импорт, пол�
   });
   await page.goto('/');
   const started = Date.now();
-  await page.getByRole('button', { name: 'Импорт EPUB', exact: true }).click();
-  await page.getByLabel('Файл EPUB', { exact: true }).setInputFiles({
+  await libraryAction(page, 'upload');
+  await page.getByLabel('Файл книги', { exact: true }).setInputFiles({
     name: 'large.epub',
     mimeType: 'application/epub+zip',
     buffer: Buffer.from(fixture.bytes),
@@ -171,8 +172,8 @@ async function addBook(page: Page) {
       },
     ],
   });
-  await page.getByRole('button', { name: 'Импорт EPUB', exact: true }).click();
-  await page.getByLabel('Файл EPUB', { exact: true }).setInputFiles({
+  await libraryAction(page, 'upload');
+  await page.getByLabel('Файл книги', { exact: true }).setInputFiles({
     name: 'offline.epub',
     mimeType: 'application/epub+zip',
     buffer: Buffer.from(fixture.bytes),
@@ -352,7 +353,7 @@ test('полный ZIP скачивается и восстанавливает�
   await expect(
     page
       .getByRole('list', { name: 'Книги библиотеки' })
-      .getByRole('button', { name: /Локальная книга PWA/ }),
+      .getByRole('button', { name: /^Локальная книга PWA/ }),
   ).toBeVisible();
   await page.goto(readerUrl);
   await expect(
@@ -367,7 +368,11 @@ test('закрытый браузер запускается офлайн из �
   request,
 }) => {
   test.setTimeout(90000);
-  const profile = test.info().outputPath('offline-profile');
+  // A short isolated path avoids Windows profile/Service Worker path limits.
+  const profile = resolve(
+    test.info().project.outputDir,
+    `offline-profile-${test.info().project.name}`,
+  );
   let context = await chromium.launchPersistentContext(profile, {
     baseURL: 'http://127.0.0.1:4185',
     viewport: { width: 390, height: 844 },
