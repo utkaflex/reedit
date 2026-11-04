@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import type { Route, Section } from '../features/shell/navigation';
 import { Icon, type IconName } from './Icon';
 const destinations: { section: Section; label: string; icon: IconName }[] = [
@@ -14,6 +14,25 @@ export function AppShell({
   route: Route;
   children: ReactNode;
 }) {
+  const shell = useRef<HTMLDivElement>(null);
+  const navigation = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const nav = navigation.current;
+    const root = shell.current;
+    if (!nav || !root) return;
+    const measure = () => {
+      root.style.setProperty(
+        '--navigation-space',
+        `${String(Math.ceil(nav.getBoundingClientRect().height))}px`,
+      );
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(nav);
+    measure();
+    return () => {
+      observer.disconnect();
+    };
+  }, [route]);
   const skipLink = (
     <a
       className="skip-link"
@@ -36,7 +55,7 @@ export function AppShell({
       </div>
     );
   return (
-    <div className="app-shell">
+    <div className="app-shell" ref={shell}>
       {skipLink}
       <aside className="app-rail">
         <a className="brand" href="#/library" aria-label="Reedit — Библиотека">
@@ -48,7 +67,11 @@ export function AppShell({
           для чтения
         </span>
       </aside>
-      <nav className="navigation" aria-label="Основные разделы">
+      <nav
+        ref={navigation}
+        className="navigation"
+        aria-label="Основные разделы"
+      >
         {destinations.map(({ section, label, icon }) => (
           <a
             key={section}

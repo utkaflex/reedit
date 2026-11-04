@@ -79,7 +79,7 @@ for (const width of [320, 390]) {
       page.getByRole('button', { name: 'Добавить', exact: true }),
     ).toBeEnabled();
     await expect(
-      page.getByRole('button', { name: 'Загрузить EPUB или FB2', exact: true }),
+      page.getByRole('button', { name: 'Загрузить книгу', exact: true }),
     ).toBeVisible();
     for (const route of ['quotes', 'statistics']) {
       await page.goto(`/#/${route}`);

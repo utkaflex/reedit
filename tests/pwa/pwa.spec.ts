@@ -192,8 +192,18 @@ async function addBook(page: Page) {
 async function settings(page: Page) {
   await page.goto('/#/settings');
   await expect(
-    page.getByRole('heading', { name: 'Офлайн и сохранность', exact: true }),
+    page.getByRole('heading', { name: 'Данные и приложение', exact: true }),
   ).toBeVisible();
+  for (const title of [
+    'Работа офлайн',
+    'Резервная копия',
+    'Восстановить из копии',
+  ]) {
+    await page
+      .locator('.disclosure-row > summary')
+      .filter({ hasText: title })
+      .click();
+  }
 }
 async function waiting(page: Page) {
   return page.evaluate(async () =>
@@ -504,7 +514,7 @@ test('обновление ожидает закрытия книги и дру�
   ]);
   await expect.poll(() => waiting(page), { timeout: 20000 }).toBe(false);
   await expect(
-    page.getByRole('heading', { name: 'Офлайн и сохранность', exact: true }),
+    page.getByRole('heading', { name: 'Данные и приложение', exact: true }),
   ).toBeVisible();
   await page.goto(url);
   await expect(page.frameLocator('iframe').locator('body')).toContainText(

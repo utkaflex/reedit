@@ -5,16 +5,16 @@ test('хранилище доступно после перезагрузки, �
   await page.goto('/#/settings');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Настройки');
   await expect(
-    page.getByText('Готово к сохранению данных', { exact: true }),
-  ).toBeVisible();
+    page.getByRole('radio', { name: 'Авто', exact: true }),
+  ).toBeEnabled();
   await page.screenshot({
     path: test.info().outputPath('foundation.png'),
     fullPage: true,
   });
   await page.reload();
   await expect(
-    page.getByText('Готово к сохранению данных', { exact: true }),
-  ).toBeVisible();
+    page.getByRole('radio', { name: 'Авто', exact: true }),
+  ).toBeEnabled();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -25,8 +25,8 @@ test('хранилище доступно после перезагрузки, �
 test('записи и Blob переживают перезагрузку в браузере', async ({ page }) => {
   await page.goto('/#/settings');
   await expect(
-    page.getByText('Готово к сохранению данных', { exact: true }),
-  ).toBeVisible();
+    page.getByRole('radio', { name: 'Авто', exact: true }),
+  ).toBeEnabled();
   await page.evaluate(async () => {
     await new Promise<void>((resolve, reject) => {
       const request = indexedDB.open('reedit');
@@ -74,8 +74,8 @@ test('записи и Blob переживают перезагрузку в бр
   });
   await page.reload();
   await expect(
-    page.getByText('Готово к сохранению данных', { exact: true }),
-  ).toBeVisible();
+    page.getByRole('radio', { name: 'Авто', exact: true }),
+  ).toBeEnabled();
   const text = await page.evaluate(
     async () =>
       new Promise<string>((resolve, reject) => {

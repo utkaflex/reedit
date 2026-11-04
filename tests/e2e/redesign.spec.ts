@@ -14,7 +14,11 @@ test('пустая коллекция остаётся доступна и им�
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Коллекции', exact: true }).click();
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: /^Коллекции/ })
+    .click();
   await page
     .getByRole('button', { name: 'Создать коллекцию', exact: true })
     .click();
@@ -69,7 +73,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
     await expect(
       page.getByRole('button', { name: 'Добавить', exact: true }),
     ).toBeEnabled();
-    await expect(page.getByLabel('Поиск по библиотеке')).toBeVisible();
+    await expect(page.getByLabel('Поиск по библиотеке')).toHaveCount(0);
     await page.screenshot({
       path: test.info().outputPath('library-empty.png'),
       scale: 'css',

@@ -292,7 +292,7 @@ export function App({
               aria-labelledby="appearance-title"
             >
               <div className="section-heading">
-                <h2 id="appearance-title">Оформление</h2>
+                <h2 id="appearance-title">Тема</h2>
                 <Icon name="settings" />
               </div>
               <div className="surface appearance-settings" aria-busy={saving}>
@@ -305,10 +305,7 @@ export function App({
                   }}
                   disabled={status.state !== 'ready'}
                 />
-                <p className="caption">
-                  «Авто» следует оформлению устройства. Шрифт и тему чтения
-                  можно изменить в читалке.
-                </p>
+
                 <p className="save-status" role="status" aria-live="polite">
                   {saving ? 'Сохраняем оформление…' : ''}
                 </p>
@@ -319,7 +316,9 @@ export function App({
                 )}
               </div>
             </section>
-            <StatusCard status={status} onRetry={retry} />
+            {status.state !== 'ready' && (
+              <StatusCard status={status} onRetry={retry} />
+            )}
             {status.state === 'ready' && (
               <SectionBoundary>
                 <Suspense
@@ -330,28 +329,28 @@ export function App({
               </SectionBoundary>
             )}
             <section className="settings-group" aria-labelledby="about-title">
-              <h2 id="about-title" className="group-title">
-                О приложении
-              </h2>
-              <List label="Информация о Reedit">
-                <ListItem
-                  title="О хранении данных"
-                  description="Что остаётся на этом устройстве"
-                  onClick={() => {
-                    setOverlay('storage');
-                  }}
-                />
-                <ListItem
-                  title="О Reedit"
-                  description="Личное пространство для чтения"
-                  onClick={() => {
-                    setOverlay('about');
-                  }}
-                />
-              </List>
-              <p className="caption">
-                Reedit v2 · Сборка {__REEDIT_BUILD__.slice(0, 8)}
-              </p>
+              <details className="settings-about">
+                <summary id="about-title">О приложении</summary>
+                <List label="Информация о Reedit">
+                  <ListItem
+                    title="О хранении данных"
+                    description="Что остаётся на этом устройстве"
+                    onClick={() => {
+                      setOverlay('storage');
+                    }}
+                  />
+                  <ListItem
+                    title="О Reedit"
+                    description="Личное пространство для чтения"
+                    onClick={() => {
+                      setOverlay('about');
+                    }}
+                  />
+                </List>
+                <p className="caption">
+                  Reedit v2 · Сборка {__REEDIT_BUILD__.slice(0, 8)}
+                </p>
+              </details>
             </section>
           </div>
         )}

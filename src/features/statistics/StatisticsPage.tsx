@@ -1,3 +1,4 @@
+import { ActivityChart } from './ActivityChart';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { newId, type Id, type Reading } from '../../domain/model';
 import type { LocalStore } from '../../domain/repositories';
@@ -114,6 +115,7 @@ export function StatisticsPage({ store }: { store: LocalStore }) {
       </div>
     );
   const summary = statistics(data, year, now, zone);
+  const hasSummary = summary.yearly.length > 0 || summary.yearTime > 0;
   const goal = data.settings[0]?.readingGoals?.[String(year)] ?? 0;
   const years = [
     ...new Set([
@@ -134,6 +136,17 @@ export function StatisticsPage({ store }: { store: LocalStore }) {
   const calendar = yearDays(year);
   const offset =
     (new Date(`${String(calendar[0])}T12:00:00Z`).getUTCDay() + 6) % 7;
+  const paperAction = (
+    <Button
+      className="statistics-paper-action"
+      variant="quiet"
+      onClick={() => {
+        setPaper(true);
+      }}
+    >
+      Добавить бумажную книгу
+    </Button>
+  );
   return (
     <div className="statistics-page">
       {error && (
@@ -141,7 +154,7 @@ export function StatisticsPage({ store }: { store: LocalStore }) {
           {error}
         </p>
       )}
-      <div className="statistics-toolbar">
+      <div className="statistics-toolbar statistics-year-picker">
         <SelectField
           label="Год"
           value={year}
@@ -153,70 +166,65 @@ export function StatisticsPage({ store }: { store: LocalStore }) {
             <option key={value}>{value}</option>
           ))}
         </SelectField>
-        <Button
-          variant="secondary"
-          onClick={() => {
-            setPaper(true);
-          }}
-        >
-          Добавить бумажную книгу
-        </Button>
       </div>
-      {data.readings.length > 0 ? (
+      {hasSummary ? (
         <section className="statistics-summary" aria-label="Годовая сводка">
-          <div className="statistics-lead">
-            <span className="caption">Ваш {year} год</span>
-            <strong>{summary.booksYear}</strong>
-            <h2>книг прочитано</h2>
-            <p className="caption">
-              {summary.yearly.length} завершённых прочтений ·{' '}
-              {duration(summary.yearTime)} с книгами
-            </p>
-          </div>
-          {data.readings.length > 0 && (
-            <dl className="statistics-facts">
+          <p className="caption">Ваш {year} год</p>
+          <dl className="statistics-facts statistics-overview-facts">
+            <div>
+              <dt>Прочитано книг</dt>
+              <dd>{summary.booksYear}</dd>
+            </div>
+            {summary.yearTime > 0 && (
               <div>
-                <dt>За текущий месяц</dt>
-                <dd>{summary.booksMonth}</dd>
+                <dt>Время чтения</dt>
+                <dd>{duration(summary.yearTime)}</dd>
               </div>
+            )}
+            {summary.averageRating !== null && (
               <div>
-                <dt>За всё время</dt>
-                <dd>{summary.booksAll}</dd>
-              </div>
-              <div>
-                <dt>Средняя оценка за {year}</dt>
+                <dt>Средняя оценка</dt>
                 <dd>
-                  {summary.averageRating?.toFixed(1) ?? '—'}
-                  <small> / 5</small>
+                  {summary.averageRating.toFixed(1)} <small>/ 5</small>
                 </dd>
               </div>
+            )}
+            {summary.averageWpm !== null && (
               <div>
-                <dt>Уникальных слов за всё время</dt>
-                <dd>{summary.uniqueWords.toLocaleString('ru')}</dd>
+                <dt>Средняя скорость</dt>
+                <dd>
+                  {Math.round(summary.averageWpm)} <small>слов/мин</small>
+                </dd>
               </div>
-            </dl>
-          )}
+            )}
+          </dl>
         </section>
       ) : (
         <section className="statistics-empty">
-          <p className="eyebrow">Ваш личный ритм</p>
-          <h2>История начинается с первой книги</h2>
+          <h2>Время для первой страницы</h2>
           <p className="caption">
-            Читайте в Reedit или добавьте бумажную книгу. Здесь появятся ваши
-            настоящие итоги.
+            Выберите книгу — здесь появится ваша история чтения.
           </p>
-          <a className="button button--secondary" href="#/library">
+          <a className="button button--primary" href="#/library">
             Выбрать книгу
           </a>
         </section>
       )}
-      <section className="statistics-section statistics-goal-section">
-        <h2>Цель на {year} год</h2>
-        <p>
-          {goal
-            ? `${String(summary.booksYear)} из ${String(goal)} книг`
-            : 'Выберите свой ритм. Цель необязательна.'}
-        </p>
+      {!hasSummary && paperAction}
+
+      {summary.yearTime > 0 && (
+        <ActivityChart days={summary.days} year={year} />
+      )}
+      <section
+        className="statistics-section statistics-goal-section"
+        data-set={goal > 0}
+      >
+        <h2>{goal ? `Цель на ${String(year)} год` : 'Цель на год'}</h2>
+        {goal > 0 && (
+          <p>
+            {summary.booksYear} из {goal} книг
+          </p>
+        )}
         {goal > 0 && (
           <progress
             aria-label="Годовая цель"
@@ -225,7 +233,9 @@ export function StatisticsPage({ store }: { store: LocalStore }) {
           />
         )}
         <details className="goal-editor">
-          <summary>{goal ? 'Изменить цель' : 'Установить цель'}</summary>
+          <summary aria-label={goal ? 'Изменить цель' : 'Установить цель'}>
+            {goal ? 'Изменить' : 'Установить'}
+          </summary>
           <form
             key={`${String(year)}-${String(goal)}`}
             className="statistics-goal"
@@ -276,6 +286,31 @@ export function StatisticsPage({ store }: { store: LocalStore }) {
         <summary>Подробная статистика</summary>
         <div className="statistics-page">
           <section className="statistics-section">
+            <h2>Итоги библиотеки</h2>
+            <dl className="statistics-facts">
+              <div>
+                <dt>За текущий месяц</dt>
+                <dd>{summary.booksMonth}</dd>
+              </div>
+              <div>
+                <dt>За всё время</dt>
+                <dd>{summary.booksAll}</dd>
+              </div>
+              <div>
+                <dt>Средняя оценка за {year}</dt>
+                <dd>
+                  {summary.averageRating?.toFixed(1) ?? '—'}
+                  <small> / 5</small>
+                </dd>
+              </div>
+              <div>
+                <dt>Уникальных слов за всё время</dt>
+                <dd>{summary.uniqueWords.toLocaleString('ru')}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="statistics-section">
             <h2>Время с книгами</h2>
             {data.readings.length > 0 && (
               <dl className="statistics-facts">
@@ -297,10 +332,6 @@ export function StatisticsPage({ store }: { store: LocalStore }) {
                 </div>
               </dl>
             )}
-            <p className="caption">
-              Активное время, без фонового воспроизведения и пауз. Неделя
-              начинается в понедельник. Часовой пояс: {zone}.
-            </p>
           </section>
           <section className="statistics-section">
             <h2>Ритм чтения</h2>
@@ -387,13 +418,7 @@ export function StatisticsPage({ store }: { store: LocalStore }) {
                 </article>
               ))}
             </div>
-            <p className="caption">
-              В обычном режиме слова учитываются по кнопке «Фрагмент прочитан»
-              после времени на чтение. В RSVP и Guided — после показа слова.
-              Переходы и пропуски не засчитываются. Скорость учитывает повторные
-              проходы; уникальный объём — объединение интервалов одного
-              содержимого без повторов.
-            </p>
+
             {summary.legacySeconds > 0 && (
               <p className="caption">
                 Ранее сохранённое время:{' '}
@@ -435,203 +460,237 @@ export function StatisticsPage({ store }: { store: LocalStore }) {
           </div>
         </div>
       </details>
-      {current.length > 0 && (
-        <section className="statistics-section">
-          <h2>Сейчас с вами</h2>
-          {current.length === 0 && (
-            <p className="caption">Здесь появятся текущие прочтения.</p>
-          )}
-          {current.map((r) => {
-            const position = data.positions
-              .filter((p) => p.readingId === r.id)
-              .sort((a, b) => b.updatedAt - a.updatedAt)[0];
-            return (
-              <article className="statistics-reading" key={r.id}>
-                <h3>{bookTitle(r.bookId)}</h3>
-                <p className="caption">
-                  {statusLabels[r.status]} · позиция{' '}
-                  {position
-                    ? `${String(Math.round(position.progression * 100))}%`
-                    : 'не сохранена'}
-                </p>
-                {position && (
-                  <progress
-                    aria-label={`Позиция: ${bookTitle(r.bookId)}`}
-                    max={1}
-                    value={position.progression}
-                  />
+      {(data.readings.length > 0 || data.journal.length > 0) && (
+        <details
+          className="statistics-details statistics-history"
+          open={hasSummary || data.journal.length > 0}
+        >
+          <summary>История и дневник</summary>
+          <div className="statistics-page">
+            {current.length > 0 && (
+              <section className="statistics-section">
+                <h2>Сейчас с вами</h2>
+                {current.length === 0 && (
+                  <p className="caption">Здесь появятся текущие прочтения.</p>
                 )}
-                <p className="caption">
-                  Позиция в тексте, не доля подтверждённых прочитанных слов.
-                </p>
-              </article>
-            );
-          })}
-        </section>
-      )}
-      {summary.yearly.length > 0 && (
-        <section className="statistics-section">
-          <h2>Прочитано в {year}</h2>
-          {summary.yearly.length === 0 ? (
-            <p className="caption">
-              Завершённых прочтений пока нет. Бумажную книгу тоже можно добавить
-              и указать дату.
-            </p>
-          ) : (
-            summary.yearly
-              .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0))
-              .map((r) => (
-                <article className="statistics-reading" key={r.id}>
-                  <h3>{bookTitle(r.bookId)}</h3>
-                  <p>
-                    {dateInput(r.finishedAt)} ·{' '}
-                    {r.rating === null
-                      ? 'Без оценки'
-                      : `${String(r.rating)} / 5`}
-                  </p>
-                  {r.review && <p className="statistics-prose">{r.review}</p>}
-                  <Button
-                    variant="quiet"
-                    onClick={() => {
-                      setReading(r);
-                    }}
-                  >
-                    Изменить прочтение
-                  </Button>
-                </article>
-              ))
-          )}
-        </section>
-      )}
-      {data.readings.length > 0 && (
-        <section className="statistics-section">
-          <h2>История прочтений</h2>
-          {data.readings.length === 0 && (
-            <p className="caption">Добавьте первую книгу в библиотеку.</p>
-          )}
-          {[...data.readings]
-            .sort((a, b) => b.createdAt - a.createdAt)
-            .map((r) => {
-              const events = data.activities.filter(
-                (a) => a.readingId === r.id,
-              );
-              const groups = new Map<string, typeof events>();
-              for (const event of events) {
-                const key = `${event.contentId}:${String(event.textVersion)}`;
-                const group = groups.get(key) ?? [];
-                group.push(event);
-                groups.set(key, group);
-              }
-              const unique = [...groups.values()].reduce(
-                (n, es) => n + intervalWords(es.flatMap((e) => e.intervals)),
-                0,
-              );
-              return (
-                <details className="statistics-reading" key={r.id}>
-                  <summary>
-                    {bookTitle(r.bookId)} · {statusLabels[r.status]}
-                  </summary>
-                  <p>
-                    {dateInput(r.startedAt) || 'Начало не указано'} —{' '}
-                    {dateInput(r.finishedAt) || 'не завершено'}
-                  </p>
-                  <p>
-                    {r.rating === null
-                      ? 'Без оценки'
-                      : `Оценка ${String(r.rating)} / 5`}
-                  </p>
-                  {r.review && <p className="statistics-prose">{r.review}</p>}
-                  <p>
-                    {unique.toLocaleString('ru')} уникальных слов в этом
-                    прочтении
-                  </p>
-                  {(['ordinary', 'rsvp', 'guided'] as const).map((m) => (
-                    <p className="caption" key={m}>
-                      {modeLabels[m]}:{' '}
-                      {duration(
-                        events
-                          .filter((e) => e.mode === m)
-                          .reduce((n, e) => n + e.milliseconds, 0),
+                {current.map((r) => {
+                  const position = data.positions
+                    .filter((p) => p.readingId === r.id)
+                    .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+                  return (
+                    <article className="statistics-reading" key={r.id}>
+                      <h3>{bookTitle(r.bookId)}</h3>
+                      <p className="caption">
+                        {statusLabels[r.status]} · позиция{' '}
+                        {position
+                          ? `${String(Math.round(position.progression * 100))}%`
+                          : 'не сохранена'}
+                      </p>
+                      {position && (
+                        <progress
+                          aria-label={`Позиция: ${bookTitle(r.bookId)}`}
+                          max={1}
+                          value={position.progression}
+                        />
                       )}
-                    </p>
-                  ))}
-                  <div className="statistics-actions">
-                    <Button
-                      variant="quiet"
-                      onClick={() => {
-                        setReading(r);
-                      }}
-                    >
-                      Изменить прочтение
-                    </Button>
-                    <Button
-                      variant="quiet"
-                      disabled={busy}
-                      onClick={() => {
-                        void run(async () => {
-                          setReading(await store.addReading(r.bookId));
-                        });
-                      }}
-                    >
-                      Новое прочтение
-                    </Button>
-                  </div>
-                </details>
-              );
-            })}
-        </section>
-      )}
-      <section className="statistics-section">
-        <div className="statistics-toolbar">
-          <h2>Книжный дневник</h2>
-          <Button
-            variant="secondary"
-            disabled={data.readings.length === 0}
-            onClick={() => {
-              setEntry('new');
-            }}
-          >
-            Записать впечатление
-          </Button>
-        </div>
-        {data.journal.length === 0 && (
-          <p className="caption">
-            Сохраняйте мысли и впечатления по ходу чтения. Записи доступны и без
-            файла книги.
-          </p>
-        )}
-        {[...data.journal]
-          .sort(
-            (a, b) => b.day.localeCompare(a.day) || b.createdAt - a.createdAt,
-          )
-          .map((item) => (
-            <article key={item.id} className="statistics-reading">
-              <time dateTime={item.day} className="caption">
-                {item.day}
-              </time>
-              <h3>{bookTitle(item.bookId)}</h3>
-              <p className="statistics-prose">{item.body}</p>
-              <div className="statistics-actions">
+                      <p className="caption">
+                        Позиция в тексте, не доля подтверждённых прочитанных
+                        слов.
+                      </p>
+                    </article>
+                  );
+                })}
+              </section>
+            )}
+            {summary.yearly.length > 0 && (
+              <section className="statistics-section">
+                <h2>Прочитано в {year}</h2>
+                {summary.yearly.length === 0 ? (
+                  <p className="caption">
+                    Завершённых прочтений пока нет. Бумажную книгу тоже можно
+                    добавить и указать дату.
+                  </p>
+                ) : (
+                  summary.yearly
+                    .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0))
+                    .map((r) => (
+                      <article className="statistics-reading" key={r.id}>
+                        <h3>{bookTitle(r.bookId)}</h3>
+                        <p>
+                          {dateInput(r.finishedAt)} ·{' '}
+                          {r.rating === null
+                            ? 'Без оценки'
+                            : `${String(r.rating)} / 5`}
+                        </p>
+                        {r.review && (
+                          <p className="statistics-prose">{r.review}</p>
+                        )}
+                        <Button
+                          variant="quiet"
+                          onClick={() => {
+                            setReading(r);
+                          }}
+                        >
+                          Изменить прочтение
+                        </Button>
+                      </article>
+                    ))
+                )}
+              </section>
+            )}
+            {data.readings.length > 0 && (
+              <section className="statistics-section">
+                <h2>История прочтений</h2>
+                {data.readings.length === 0 && (
+                  <p className="caption">Добавьте первую книгу в библиотеку.</p>
+                )}
+                {[...data.readings]
+                  .sort((a, b) => b.createdAt - a.createdAt)
+                  .map((r) => {
+                    const events = data.activities.filter(
+                      (a) => a.readingId === r.id,
+                    );
+                    const groups = new Map<string, typeof events>();
+                    for (const event of events) {
+                      const key = `${event.contentId}:${String(event.textVersion)}`;
+                      const group = groups.get(key) ?? [];
+                      group.push(event);
+                      groups.set(key, group);
+                    }
+                    const unique = [...groups.values()].reduce(
+                      (n, es) =>
+                        n + intervalWords(es.flatMap((e) => e.intervals)),
+                      0,
+                    );
+                    return (
+                      <details className="statistics-reading" key={r.id}>
+                        <summary>
+                          {bookTitle(r.bookId)} · {statusLabels[r.status]}
+                        </summary>
+                        <p>
+                          {dateInput(r.startedAt) || 'Начало не указано'} —{' '}
+                          {dateInput(r.finishedAt) || 'не завершено'}
+                        </p>
+                        <p>
+                          {r.rating === null
+                            ? 'Без оценки'
+                            : `Оценка ${String(r.rating)} / 5`}
+                        </p>
+                        {r.review && (
+                          <p className="statistics-prose">{r.review}</p>
+                        )}
+                        <p>
+                          {unique.toLocaleString('ru')} уникальных слов в этом
+                          прочтении
+                        </p>
+                        {(['ordinary', 'rsvp', 'guided'] as const).map((m) => (
+                          <p className="caption" key={m}>
+                            {modeLabels[m]}:{' '}
+                            {duration(
+                              events
+                                .filter((e) => e.mode === m)
+                                .reduce((n, e) => n + e.milliseconds, 0),
+                            )}
+                          </p>
+                        ))}
+                        <div className="statistics-actions">
+                          <Button
+                            variant="quiet"
+                            onClick={() => {
+                              setReading(r);
+                            }}
+                          >
+                            Изменить прочтение
+                          </Button>
+                          <Button
+                            variant="quiet"
+                            disabled={busy}
+                            onClick={() => {
+                              void run(async () => {
+                                setReading(await store.addReading(r.bookId));
+                              });
+                            }}
+                          >
+                            Новое прочтение
+                          </Button>
+                        </div>
+                      </details>
+                    );
+                  })}
+              </section>
+            )}
+            <section className="statistics-section">
+              <div className="statistics-toolbar">
+                <h2>Книжный дневник</h2>
                 <Button
-                  variant="quiet"
+                  variant="secondary"
+                  disabled={data.readings.length === 0}
                   onClick={() => {
-                    setEntry(item);
+                    setEntry('new');
                   }}
                 >
-                  Редактировать запись
-                </Button>
-                <Button
-                  variant="quiet"
-                  onClick={() => {
-                    setRemove(item);
-                  }}
-                >
-                  Удалить запись
+                  Записать впечатление
                 </Button>
               </div>
-            </article>
-          ))}
-      </section>
+              {data.journal.length === 0 && (
+                <p className="caption">
+                  Сохраняйте мысли и впечатления по ходу чтения. Записи доступны
+                  и без файла книги.
+                </p>
+              )}
+              {[...data.journal]
+                .sort(
+                  (a, b) =>
+                    b.day.localeCompare(a.day) || b.createdAt - a.createdAt,
+                )
+                .map((item) => (
+                  <article key={item.id} className="statistics-reading">
+                    <time dateTime={item.day} className="caption">
+                      {item.day}
+                    </time>
+                    <h3>{bookTitle(item.bookId)}</h3>
+                    <p className="statistics-prose">{item.body}</p>
+                    <div className="statistics-actions">
+                      <Button
+                        variant="quiet"
+                        onClick={() => {
+                          setEntry(item);
+                        }}
+                      >
+                        Редактировать запись
+                      </Button>
+                      <Button
+                        variant="quiet"
+                        onClick={() => {
+                          setRemove(item);
+                        }}
+                      >
+                        Удалить запись
+                      </Button>
+                    </div>
+                  </article>
+                ))}
+            </section>
+          </div>
+        </details>
+      )}
+      <details className="statistics-help">
+        <summary>Как считаются показатели</summary>
+        <div className="form-stack">
+          <p>
+            Активное время не включает фон и паузы. Неделя начинается в
+            понедельник. Часовой пояс: {zone}.
+          </p>{' '}
+          <p className="caption">
+            В обычном режиме слова учитываются по кнопке «Фрагмент прочитан»
+            после времени на чтение. В RSVP и Guided — после показа слова.
+            Переходы и пропуски не засчитываются. Скорость учитывает повторные
+            проходы; уникальный объём — объединение интервалов одного
+            содержимого без повторов.
+          </p>
+        </div>
+      </details>
+      {hasSummary && paperAction}
       {paper && (
         <BookEditor
           book={undefined}

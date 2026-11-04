@@ -323,3 +323,212 @@
   font-weight: 700;
   letter-spacing: -0.06em;
 }
+
+/* The overview is distinct from the optional history and methodology. */
+.statistics-page {
+  gap: 24px;
+}
+.statistics-page h2 {
+  font-family: var(--font-ui);
+  font-size: 1.25rem;
+  font-weight: 650;
+}
+.statistics-empty {
+  border: 0;
+  padding: 16px 0 0;
+  gap: 12px;
+}
+.statistics-empty h2 {
+  font-size: 1.25rem;
+}
+.statistics-empty .button {
+  min-width: 180px;
+}
+.statistics-paper-action {
+  width: fit-content;
+  margin-top: -16px;
+  padding-left: 0;
+  font-size: 0.875rem;
+}
+.statistics-goal-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+}
+.statistics-goal-section h2 {
+  font-size: 1rem;
+}
+.statistics-goal-section > p,
+.statistics-goal-section > progress {
+  grid-column: 1/-1;
+}
+.statistics-goal-section .goal-editor {
+  min-width: 0;
+}
+.statistics-goal-section .goal-editor[open] {
+  grid-column: 1/-1;
+}
+.goal-editor > summary {
+  font-size: 0.875rem;
+  list-style: none;
+}
+.goal-editor > summary::-webkit-details-marker {
+  display: none;
+}
+.statistics-details {
+  padding: 0;
+  border-block: 0;
+  border-top: 1px solid var(--color-border);
+}
+.statistics-details > summary,
+.statistics-help > summary {
+  min-height: 44px;
+  cursor: pointer;
+  align-content: center;
+  font-size: 0.875rem;
+}
+.statistics-help {
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+.statistics-help .form-stack {
+  padding-block: 12px;
+  gap: 12px;
+}
+.statistics-summary {
+  padding: 16px;
+  gap: 16px;
+}
+.statistics-lead > strong {
+  font-size: 2.5rem;
+}
+.statistics-lead h2 {
+  font-size: 1rem;
+}
+.statistics-facts {
+  gap: 12px 16px;
+}
+.statistics-facts dt {
+  font-size: 0.8125rem;
+}
+.statistics-facts dd {
+  margin-top: 4px;
+  font-size: 1.25rem;
+}
+.statistics-history > .statistics-page {
+  margin-top: 12px;
+}
+.activity-overview h2 {
+  margin-bottom: 16px;
+}
+.activity-months {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 4px;
+  height: 96px;
+  margin-bottom: 28px;
+}
+.activity-months > div {
+  display: flex;
+  flex-direction: column;
+  justify-content: end;
+  position: relative;
+}
+.activity-months span {
+  background: var(--color-accent);
+  border-radius: 4px 4px 0 0;
+}
+.activity-months small {
+  position: absolute;
+  top: calc(100% + 6px);
+  width: 100%;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+}
+@media (max-width: 899px), (max-height: 599px) {
+  .page--statistics .page-header {
+    padding-right: 104px;
+    min-height: 44px;
+    align-content: center;
+  }
+  .page--statistics {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    align-content: flex-start;
+    gap: 24px 12px;
+  }
+  .page--statistics .page-header {
+    flex: 1 1 max-content;
+    padding-right: 0;
+    margin: 0;
+  }
+  .page--statistics > .statistics-page {
+    display: contents;
+  }
+  .page--statistics > .statistics-page > * {
+    flex: 1 0 100%;
+    min-width: 0;
+  }
+  .page--statistics > .statistics-page > .statistics-year-picker {
+    flex: 0 0 auto;
+    position: static;
+    margin: 0;
+  }
+  .page--statistics > .statistics-page > .statistics-paper-action {
+    flex: 0 1 auto;
+  }
+  .statistics-year-picker .field {
+    width: 6rem;
+  }
+  .statistics-year-picker .field > label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .statistics-year-picker .field__input {
+    padding-inline: 10px 24px;
+    min-height: 44px;
+  }
+  .statistics-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.statistics-goal-section .goal-editor:not([open]) {
+  grid-row: 1;
+  grid-column: 2;
+}
+.statistics-goal-section[data-set='true'] > p {
+  font-size: 0.875rem;
+}
+.statistics-goal-section > progress {
+  height: 4px;
+  margin-top: 8px;
+}
+.statistics-overview-facts dd {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .activity-months > div:not(:nth-child(3n + 1)) small {
+    display: none;
+  }
+  .activity-months small {
+    width: max-content;
+    left: 50%;
+    translate: -50%;
+  }
+  .activity-months > div:first-child small {
+    left: 0;
+    translate: none;
+  }
+}

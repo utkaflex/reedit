@@ -182,11 +182,11 @@ test('редактирование, повторное прочтение и п�
     .click();
   await page.getByRole('button', { name: 'Удалить книгу навсегда' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Первая книга — начало истории' }),
+    page.getByRole('heading', { name: 'Ваша первая книга' }),
   ).toBeVisible();
   await page.reload();
   await expect(
-    page.getByRole('heading', { name: 'Первая книга — начало истории' }),
+    page.getByRole('heading', { name: 'Ваша первая книга' }),
   ).toBeVisible();
 });
 
@@ -236,7 +236,14 @@ test('дубли, поиск, фильтры, список и подтвержд
     page.getByRole('heading', { name: 'Ничего не найдено' }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Сбросить поиск и фильтры' }).click();
-  await page.getByText('Список', { exact: true }).click();
+  await page.getByRole('button', { name: /Фильтры и сортировка/ }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('radio', { name: 'Список', exact: true })
+    .check();
+  await page
+    .getByRole('button', { name: 'Показать книги', exact: true })
+    .click();
   await expect(page.locator('.book-list')).toBeVisible();
   expect(
     await page.evaluate(

@@ -33,8 +33,8 @@ test('автотема реагирует на систему; ручной вы
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.goto('/#/settings');
   await expect(
-    page.getByText('Готово к сохранению данных', { exact: true }),
-  ).toBeVisible();
+    page.getByRole('radio', { name: 'Авто', exact: true }),
+  ).toBeEnabled();
   await expect(page.locator('html')).toHaveCSS('color-scheme', 'dark');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.screenshot({
@@ -66,8 +66,8 @@ test('ошибка записи темы оставляет прежнее оф�
 }) => {
   await page.goto('/#/settings');
   await expect(
-    page.getByText('Готово к сохранению данных', { exact: true }),
-  ).toBeVisible();
+    page.getByRole('radio', { name: 'Авто', exact: true }),
+  ).toBeEnabled();
   await page.evaluate(() => {
     const originalPut = Object.getOwnPropertyDescriptor(
       IDBObjectStore.prototype,
@@ -91,6 +91,7 @@ test('диалог и панель удерживают фокус, закрыв
   page,
 }) => {
   await page.goto('/#/settings');
+  await page.locator('.settings-about > summary').click();
   for (const [triggerName, title] of [
     ['О хранении данных', 'На вашем устройстве'],
     ['О Reedit', 'О Reedit'],

@@ -145,17 +145,21 @@ export function Library({
       })
     : [];
   return (
-    <div className="library-feature">
+    <div
+      className={`library-feature${snapshot?.books.length === 0 ? ' library-feature--empty' : ''}`}
+    >
       <div className="library-actions">
-        <TextField
-          label="Поиск по библиотеке"
-          type="search"
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-          }}
-          placeholder="Название, автор, жанр или ISBN"
-        />
+        {snapshot && snapshot.books.length > 0 && (
+          <TextField
+            label="Поиск по библиотеке"
+            type="search"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+            }}
+            placeholder="Название, автор, жанр или ISBN"
+          />
+        )}
         <Button
           aria-label="Добавить"
           disabled={!snapshot || Boolean(loadError)}
@@ -240,6 +244,17 @@ export function Library({
                     }
                   >
                     <div className="filter-fields">
+                      <div className="mobile-library-view">
+                        <SegmentedControl
+                          label="Вид библиотеки"
+                          value={view}
+                          options={[
+                            { value: 'grid', label: 'Сетка' },
+                            { value: 'list', label: 'Список' },
+                          ]}
+                          onChange={setView}
+                        />
+                      </div>
                       <SelectField
                         label="Статус книги"
                         value={status}
@@ -410,7 +425,7 @@ export function Library({
                 icon="book"
                 title={
                   snapshot.books.length === 0
-                    ? 'Первая книга — начало истории'
+                    ? 'Ваша первая книга'
                     : selectedCollection?.bookIds.length === 0
                       ? 'В коллекции пока нет книг'
                       : 'Ничего не найдено'
@@ -418,7 +433,7 @@ export function Library({
               >
                 <p>
                   {snapshot.books.length === 0
-                    ? 'Загрузите свою книгу или начните с бумажной. Книги и записи остаются на этом устройстве.'
+                    ? 'Любимые книги — всегда с вами.'
                     : selectedCollection?.bookIds.length === 0
                       ? 'Откройте коллекцию и выберите книги для неё.'
                       : 'Попробуйте изменить поиск, статус или коллекцию.'}
@@ -432,7 +447,7 @@ export function Library({
                       }}
                     >
                       <Icon name="upload" />
-                      Загрузить EPUB или FB2
+                      Загрузить книгу
                     </Button>
                     <Button
                       variant="quiet"
@@ -440,7 +455,7 @@ export function Library({
                         setCatalogOpen(true);
                       }}
                     >
-                      Найти в каталогах
+                      Найти в каталоге
                     </Button>
                     <Button
                       variant="quiet"
@@ -465,18 +480,6 @@ export function Library({
                   </Button>
                 )}
               </EmptyState>
-              {snapshot.books.length === 0 && (
-                <div className="empty-collections">
-                  <Button
-                    variant="quiet"
-                    onClick={() => {
-                      setCollectionsOpen(true);
-                    }}
-                  >
-                    Коллекции
-                  </Button>
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -584,6 +587,20 @@ export function Library({
               <span>
                 <strong>Добавить вручную</strong>
                 <small>В том числе бумажную книгу</small>
+              </span>
+              <Icon name="arrow" />
+            </Button>
+            <Button
+              variant="quiet"
+              onClick={() => {
+                setAddOpen(false);
+                setCollectionsOpen(true);
+              }}
+            >
+              <Icon name="library" />
+              <span>
+                <strong>Коллекции</strong>
+                <small>Собрать книги по темам</small>
               </span>
               <Icon name="arrow" />
             </Button>
