@@ -8,7 +8,9 @@ export function observeNativeSelection(
   let previous: Range | null = null;
   let delayed: ReturnType<typeof setTimeout> | null = null;
   const sample = () => {
-    if (doc.visibilityState === 'hidden') return;
+    // An iframe's visibility state is not a reliable indicator of the host PWA.
+    // Selection is read-only; pause only when the top-level app is backgrounded.
+    if (win.top?.document.visibilityState === 'hidden') return;
     const selection = win.getSelection();
     const range =
       selection && !selection.isCollapsed && selection.rangeCount

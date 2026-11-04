@@ -118,7 +118,20 @@ export function ReaderAnnotations({
           role="group"
           aria-label="Действия с выделенным текстом"
           onPointerDown={(event) => {
-            event.preventDefault();
+            if (event.pointerType !== 'touch') event.preventDefault();
+          }}
+          onTouchEnd={(event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            const button = target.closest('button');
+            if (
+              button &&
+              event.currentTarget.contains(button) &&
+              !button.disabled
+            ) {
+              event.preventDefault();
+              button.click();
+            }
           }}
         >
           <p className="selection-preview">{selection.quote}</p>

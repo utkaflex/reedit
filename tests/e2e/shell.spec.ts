@@ -4,7 +4,7 @@ test('навигация, фокус, история и прямые ссылк�
   await page.goto('/');
   const nav = page.getByRole('navigation', { name: 'Основные разделы' });
   await expect(
-    page.getByRole('heading', { name: 'Библиотека', exact: true }),
+    page.getByRole('heading', { name: /^(Моя )?Библиотека$/, exact: true }),
   ).toBeVisible();
   await expect(nav.getByRole('link', { name: 'Библиотека' })).toHaveAttribute(
     'aria-current',
@@ -133,7 +133,7 @@ test('полноэкранная оболочка не показывает на
   );
   await page.getByRole('link', { name: 'К библиотеке', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-    'Библиотека',
+    /^(Моя )?Библиотека$/,
   );
 });
 
@@ -148,7 +148,9 @@ test('320 px, увеличенный текст и reduced motion без гор�
       .getByRole('navigation')
       .getByRole('link', { name: section })
       .click();
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(section);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+      section === 'Библиотека' ? /^(Моя )?Библиотека$/ : section,
+    );
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -170,7 +172,7 @@ test('320 px, увеличенный текст и reduced motion без гор�
   await page.evaluate(() => {
     window.scrollTo(0, document.documentElement.scrollHeight);
   });
-  const footer = await page.locator('.page-footer').boundingBox();
+  const footer = await page.locator('.settings-stack').boundingBox();
   const navigation = await page.getByRole('navigation').boundingBox();
   expect(
     footer && navigation && footer.y + footer.height <= navigation.y,

@@ -1000,3 +1000,107 @@ h2 {
     flex-direction: column;
   }
 }
+
+/* Reedit v2: shared composition; reading typography remains independent. */
+.page-header .eyebrow,
+.page-header .page-subtitle {
+  display: none;
+}
+.page-header {
+  margin-bottom: 24px;
+}
+.page-header h1 {
+  font-family: var(--font-ui);
+  font-size: var(--text-title);
+  font-weight: 750;
+  letter-spacing: -0.035em;
+  margin: 0;
+}
+.page {
+  padding-top: calc(env(safe-area-inset-top) + 24px);
+}
+.page--library .page-header {
+  padding-right: 64px;
+  margin-bottom: 22px;
+}
+.desktop-title-prefix {
+  display: none;
+}
+.button {
+  font-size: 14px;
+  font-weight: 600;
+}
+.settings-group > h2,
+.settings-group .section-heading h2 {
+  font: 700 20px/1.35 var(--font-ui);
+}
+.book-card__fallback {
+  background: #57458a;
+}
+.book-card__cover[data-tone='1'] .book-card__fallback {
+  background: #4e506c;
+}
+.book-card__cover[data-tone='2'] .book-card__fallback {
+  background: #755877;
+}
+.status-chip {
+  font-size: 13px;
+  border-radius: 999px;
+}
+.brand {
+  font-family: var(--font-ui);
+  font-weight: 750;
+  font-size: 30px;
+}
+.page-footer {
+  display: none;
+}
+.navigation a[aria-current='page'] {
+  background: var(--color-accent-soft);
+}
+@media (min-width: 900px) and (min-height: 600px) {
+  .app-rail {
+    padding: 28px 24px;
+  }
+  .rail-caption {
+    display: none;
+  }
+  .navigation {
+    top: 110px;
+    left: 12px;
+    width: calc(var(--rail-width) - 24px);
+  }
+  .navigation a {
+    font-size: 14px;
+    min-height: 48px;
+    padding: 12px;
+  }
+  .navigation a[aria-current='page'] {
+    box-shadow: none;
+    font-weight: 650;
+  }
+  .page {
+    padding: 30px 36px 40px;
+  }
+  .desktop-title-prefix {
+    display: inline;
+  }
+  .page--library .page-header {
+    min-height: 48px;
+    padding-right: 50%;
+    margin-bottom: 24px;
+    align-content: center;
+  }
+  .book-dialog {
+    width: 34rem;
+    max-width: 90vw;
+    height: 100dvh;
+    max-height: 100dvh !important;
+    top: 0 !important;
+    right: 0;
+    left: auto;
+    margin: 0;
+    translate: none !important;
+    border-radius: 18px 0 0 18px;
+  }
+}

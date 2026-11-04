@@ -276,9 +276,7 @@ test('цитата, комментарий, цвет, закладка, эксп
   await page
     .getByRole('button', { name: 'Цитаты и закладки', exact: true })
     .click();
-  await page
-    .getByLabel('Показывать', { exact: true })
-    .selectOption('bookmarks');
+  await page.getByRole('radio', { name: 'Закладки', exact: true }).check();
   await expect(
     page.getByRole('heading', { name: 'Моя закладка' }),
   ).toBeVisible();
@@ -345,4 +343,49 @@ test('аннотации остаются после удаления файла
   await expect(
     page.getByRole('button', { name: 'К месту в книге' }),
   ).toBeEnabled();
+});
+
+test('касание цитат и сохранения работает без совместимого click', async ({
+  page,
+}) => {
+  await open(page);
+  await page
+    .frameLocator('iframe')
+    .locator('p')
+    .first()
+    .evaluate((p) => {
+      const doc = p.ownerDocument,
+        text = p.firstChild;
+      if (!text) throw Error('Missing text');
+      const range = doc.createRange();
+      range.setStart(text, 0);
+      range.setEnd(text, 22);
+      const selection = doc.defaultView?.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      // Native iOS selection dismissal may consume click; dispatch only touchend.
+      doc.defaultView?.parent.document
+        .querySelector('button[aria-label="Цитаты и закладки"]')
+        ?.dispatchEvent(
+          new Event('touchend', { bubbles: true, cancelable: true }),
+        );
+    });
+  const save = page.getByRole('button', {
+    name: 'Сохранить цитату',
+    exact: true,
+  });
+  await expect(save).toBeVisible();
+  await save.dispatchEvent('touchend', { bubbles: true, cancelable: true });
+  await expect(
+    page.getByText('Цитата сохранена', { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Закрыть книгу', exact: true })
+    .click();
+  await expect(page).toHaveURL(/#\/library$/);
+  await page.goto('/#/quotes');
+  await expect(page.locator('.saved-fragment')).toHaveCount(1);
+  await expect(page.locator('.saved-fragment blockquote')).toHaveText(
+    'Спокойный русский текс',
+  );
 });

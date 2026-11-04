@@ -106,7 +106,7 @@ test('FB2: оригинал, изображения, примечания и о�
   );
   await page.getByRole('button', { name: 'Закрыть книгу' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Библиотека', exact: true }),
+    page.getByRole('heading', { name: /^(Моя )?Библиотека$/, exact: true }),
   ).toBeVisible();
   await page.reload();
   await page
@@ -122,7 +122,7 @@ test('FB2: оригинал, изображения, примечания и о�
   await expect(page.locator('.reader-chapter')).toContainText('Примечание 1');
   await page.getByRole('button', { name: 'Закрыть книгу' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Библиотека', exact: true }),
+    page.getByRole('heading', { name: /^(Моя )?Библиотека$/, exact: true }),
   ).toBeVisible();
   const stored = await snapshot(page);
   expect(stored.files[0]?.source).toBe(fixture.source);

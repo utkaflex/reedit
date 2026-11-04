@@ -14,6 +14,7 @@ import {
 } from '../../services/annotations';
 import { readerUrl } from '../shell/navigation';
 import { EmptyState } from '../../ui/EmptyState';
+import { SegmentedControl } from '../../ui/SegmentedControl';
 import { Button } from '../../ui/Button';
 import { Dialog } from '../../ui/Dialog';
 import { SelectField, TextArea } from '../../ui/FormControls';
@@ -145,6 +146,7 @@ export function SavedNotes({
       const text = 'quote' in item ? `${item.quote} ${item.note}` : item.label;
       const title = data?.books.find((b) => b.id === item.bookId)?.title ?? '';
       return (
+        (kind !== 'notes' || ('note' in item && item.note.trim().length > 0)) &&
         (!book || item.bookId === book) &&
         (!color || ('quote' in item && (item.color ?? 'yellow') === color)) &&
         (!after || item.createdAt >= new Date(`${after}T00:00:00`).getTime()) &&
@@ -187,17 +189,19 @@ export function SavedNotes({
               setQuery(e.target.value);
             }}
           />
-          <SelectField
+          <SegmentedControl
             label="Показывать"
             value={kind}
-            onChange={(e) => {
-              setKind(e.target.value);
+            options={[
+              { value: 'quotes', label: 'Цитаты' },
+              { value: 'notes', label: 'Заметки' },
+              { value: 'bookmarks', label: 'Закладки' },
+            ]}
+            onChange={(value) => {
+              setKind(value);
               setColor('');
             }}
-          >
-            <option value="quotes">Цитаты и заметки</option>
-            <option value="bookmarks">Закладки</option>
-          </SelectField>
+          />
           <details className="notes-filter-disclosure">
             <summary>
               Фильтры{book || color || after || before ? ' · применены' : ''}

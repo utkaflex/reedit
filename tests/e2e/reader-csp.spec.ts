@@ -36,7 +36,10 @@ for (const scenario of [
         '<link rel="stylesheet" href="styles.css" type="text/css"/></head>',
       ),
     );
-    zip.file('EPUB/styles.css', 'p { letter-spacing: 0.375px; }');
+    zip.file(
+      'EPUB/styles.css',
+      'p { letter-spacing: 0.375px; user-select:none; -webkit-user-select:none; }',
+    );
     const bytes = await zip.generateAsync({ type: 'uint8array' });
     page.on('console', (message) => {
       if (message.type() === 'error') errors.push(message.text());
@@ -62,6 +65,7 @@ for (const scenario of [
     expect(result, JSON.stringify({ result, errors })).toMatchObject({
       ready: true,
       letterSpacing: '0.375px',
+      userSelect: 'text',
     });
   });
 }

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { LibrarySnapshot } from '../../domain/repositories';
 import type { Id, ReadingPosition } from '../../domain/model';
 import { BookCover } from '../../ui/BookCover';
@@ -14,7 +15,8 @@ export function ContinueReading({
   positions: ReadingPosition[];
   onRead: (bookId: Id, fileId: Id, readingId: Id) => void;
 }) {
-  const last = [...positions]
+  const [chosen, setChosen] = useState('');
+  const available = [...positions]
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .flatMap((position) => {
       const reading = snapshot.readings.find(
@@ -32,7 +34,9 @@ export function ContinueReading({
       );
       const book = snapshot.books.find((b) => b.id === reading?.bookId);
       return book && file && reading ? [{ position, book, file, reading }] : [];
-    })[0];
+    });
+  const last =
+    available.find((entry) => entry.reading.id === chosen) ?? available[0];
   const local = useBlobUrl(last?.book.cover ?? null);
   if (!last) return null;
   const { book, file, reading, position } = last;
@@ -44,11 +48,16 @@ export function ContinueReading({
         authors={book.authors}
         {...(cover ? { url: cover } : {})}
       />
-      <div>
-        <p className="eyebrow">С вами сейчас</p>
+      <div className="continue-reading__body">
+        <p className="eyebrow">Продолжить чтение</p>
         <h2>{book.title}</h2>
         <p className="caption">{book.authors.join(', ')}</p>
         <div className="continue-progress">
+          {position.cursor && (
+            <span className="continue-section">
+              Раздел {position.cursor.spineIndex + 1}
+            </span>
+          )}
           <progress
             aria-label="Сохранённая позиция"
             value={position.progression}
@@ -57,13 +66,32 @@ export function ContinueReading({
           <span>{Math.round(position.progression * 100)}%</span>
         </div>
         <Button
-          variant="quiet"
+          variant="primary"
+          aria-label="Продолжить чтение"
           onClick={() => {
             onRead(book.id, file.id, reading.id);
           }}
         >
-          Продолжить чтение →
+          Продолжить
         </Button>
+        {available.length > 1 && (
+          <label className="continue-switch">
+            <span className="visually-hidden">Другие текущие книги</span>
+            <select
+              aria-label="Другие текущие книги"
+              value={reading.id}
+              onChange={(event) => {
+                setChosen(event.target.value);
+              }}
+            >
+              {available.map((entry) => (
+                <option key={entry.reading.id} value={entry.reading.id}>
+                  {entry.book.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
     </section>
   );

@@ -1,6 +1,13 @@
 import type { ReactNode } from 'react';
 
 const shapes = {
+  more: (
+    <>
+      <circle cx="5" cy="12" r="1" />
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="19" cy="12" r="1" />
+    </>
+  ),
   plus: <path d="M12 5v14M5 12h14" />,
   upload: <path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5" />,
   search: (

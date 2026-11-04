@@ -78,7 +78,7 @@ class SectionBoundary extends Component<
 
 const titles: Record<Route, string> = {
   library: 'Библиотека',
-  quotes: 'Цитаты',
+  quotes: 'Мои цитаты',
   statistics: 'Статистика',
   settings: 'Настройки',
   reading: 'Чтение',
@@ -239,6 +239,9 @@ export function App({
                   : 'Reedit'}
           </p>
           <h1 ref={heading} tabIndex={-1}>
+            {route === 'library' && (
+              <span className="desktop-title-prefix">Моя </span>
+            )}
             {titles[route]}
           </h1>
           <p className="page-subtitle">
@@ -346,6 +349,9 @@ export function App({
                   }}
                 />
               </List>
+              <p className="caption">
+                Reedit v2 · Сборка {__REEDIT_BUILD__.slice(0, 8)}
+              </p>
             </section>
           </div>
         )}

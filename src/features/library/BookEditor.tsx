@@ -130,37 +130,6 @@ export function BookEditor({
             hint="Несколько авторов — через точку с запятой"
             maxLength={2000}
           />
-          <TextArea
-            label="Описание"
-            name="description"
-            defaultValue={book?.description ?? ''}
-            maxLength={30000}
-          />
-          <TextField
-            label="Жанры"
-            name="genres"
-            defaultValue={book?.genres.join(', ') ?? ''}
-            hint="Через запятую"
-            maxLength={2000}
-          />
-          <TextField
-            label="Издательство"
-            name="publisher"
-            defaultValue={book?.publisher ?? ''}
-            maxLength={500}
-          />
-          <TextField
-            label="Год или дата издания"
-            name="publishedDate"
-            defaultValue={book?.publishedDate ?? ''}
-            maxLength={100}
-          />
-          <TextField
-            label="ISBN (необязательно)"
-            name="isbn"
-            defaultValue={book?.isbn.join(', ') ?? ''}
-            maxLength={200}
-          />
           <div className="field">
             <label htmlFor="cover-upload">Обложка</label>
             <input
@@ -194,6 +163,37 @@ export function BookEditor({
               </Button>
             )}
           </div>
+          <TextArea
+            label="Описание"
+            name="description"
+            defaultValue={book?.description ?? ''}
+            maxLength={30000}
+          />
+          <TextField
+            label="Жанры"
+            name="genres"
+            defaultValue={book?.genres.join(', ') ?? ''}
+            hint="Через запятую"
+            maxLength={2000}
+          />
+          <TextField
+            label="Издательство"
+            name="publisher"
+            defaultValue={book?.publisher ?? ''}
+            maxLength={500}
+          />
+          <TextField
+            label="Год или дата издания"
+            name="publishedDate"
+            defaultValue={book?.publishedDate ?? ''}
+            maxLength={100}
+          />
+          <TextField
+            label="ISBN (необязательно)"
+            name="isbn"
+            defaultValue={book?.isbn.join(', ') ?? ''}
+            maxLength={200}
+          />
         </fieldset>
         {error && (
           <p role="alert" className="error-text">

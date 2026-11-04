@@ -61,6 +61,7 @@ export function ReaderScreen({
   const [fromStart, setFromStart] = useState(false);
   const [selection, setSelection] = useState<ReaderSelection | null>(null);
   const selectedFragment = useRef<ReaderSelection | null>(null);
+  const quoteTouchAt = useRef(-Infinity);
   const clearSelection = useCallback(() => {
     selectedFragment.current = null;
     setSelection(null);
@@ -68,6 +69,14 @@ export function ReaderScreen({
   const [notesPanel, setNotesPanel] = useState<'saved' | 'bookmark' | null>(
     null,
   );
+  const openQuotes = () => {
+    const value = session.current?.getSelection() ?? selectedFragment.current;
+    setControls(true);
+    if (value) {
+      selectedFragment.current = value;
+      setSelection(value);
+    } else setNotesPanel('saved');
+  };
   const [leave, setLeave] = useState(false);
   const [speedChooser, setSpeedChooser] = useState(false);
   const speedActive = useRef(false);
@@ -404,22 +413,22 @@ export function ReaderScreen({
           variant="quiet"
           aria-label="Цитаты и закладки"
           disabled={state !== 'ready' || busy}
-          onPointerDown={(event) => {
+          onPointerDown={() => {
             const value = session.current?.getSelection();
             if (value) {
-              event.preventDefault();
               selectedFragment.current = value;
               setSelection(value);
             }
           }}
+          onTouchEnd={(event) => {
+            // iOS can consume the compatibility click while dismissing its
+            // selection menu. Finish the touch directly, without a ghost click.
+            event.preventDefault();
+            quoteTouchAt.current = performance.now();
+            openQuotes();
+          }}
           onClick={() => {
-            const value =
-              session.current?.getSelection() ?? selectedFragment.current;
-            if (value) {
-              selectedFragment.current = value;
-              setSelection(value);
-              setControls(true);
-            } else setNotesPanel('saved');
+            if (performance.now() - quoteTouchAt.current > 700) openQuotes();
           }}
         >
           <Icon name="quote" />

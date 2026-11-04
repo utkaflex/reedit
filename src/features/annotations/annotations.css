@@ -166,3 +166,15 @@
     padding: 20px 16px;
   }
 }
+
+.notes-toolbar {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+.notes-toolbar > .segmented-field {
+  max-width: 440px;
+}
+.saved-fragment {
+  border-radius: 16px;
+  border: 1px solid var(--color-border);
+}

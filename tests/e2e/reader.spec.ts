@@ -78,7 +78,7 @@ test('точное слово: CFI, выделение, оформление, с
   await openBook(page);
   await page.getByRole('button', { name: 'Закрыть книгу' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Библиотека', exact: true }),
+    page.getByRole('heading', { name: /^(Моя )?Библиотека$/, exact: true }),
   ).toBeVisible();
   const result = await page.evaluate<RoundtripResult>(async () => {
     const path = '/tests/fixtures/position-harness.ts';
@@ -116,7 +116,7 @@ test('старый CFI из HTML-таблицы переносится в XHTML 
   await expect(page.frameLocator('iframe').locator('tbody')).toHaveCount(0);
   await page.getByRole('button', { name: 'Закрыть книгу' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Библиотека', exact: true }),
+    page.getByRole('heading', { name: /^(Моя )?Библиотека$/, exact: true }),
   ).toBeVisible();
   const expected = await page.evaluate(async () => {
     const path = '/tests/fixtures/position-harness.ts';
@@ -537,12 +537,12 @@ test('закрытие во время открытия не оставляет 
   const url = page.url();
   await page.getByRole('button', { name: 'Закрыть книгу' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Библиотека', exact: true }),
+    page.getByRole('heading', { name: /^(Моя )?Библиотека$/, exact: true }),
   ).toBeVisible();
   await page.goto(url);
   await page.getByRole('button', { name: 'Закрыть книгу' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Библиотека', exact: true }),
+    page.getByRole('heading', { name: /^(Моя )?Библиотека$/, exact: true }),
   ).toBeVisible();
   await page.goto(url);
   await expect(

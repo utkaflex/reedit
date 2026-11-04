@@ -293,3 +293,33 @@
     font-size: 24px;
   }
 }
+
+.statistics-section h2,
+.statistics-empty h2 {
+  font-family: var(--font-ui);
+  font-size: 22px;
+  font-weight: 700;
+}
+.statistics-summary {
+  background: var(--color-accent-soft);
+  border-radius: 16px;
+  padding: 24px;
+}
+.statistics-toolbar {
+  margin-bottom: 24px;
+}
+.statistics-toolbar .button {
+  font-size: 14px;
+}
+
+.statistics-toolbar .field {
+  width: 112px;
+}
+.statistics-lead h2 {
+  font: 700 22px/1.3 var(--font-ui);
+}
+.statistics-lead > strong {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  letter-spacing: -0.06em;
+}

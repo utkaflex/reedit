@@ -79,8 +79,11 @@ test('удаление файла сохраняет книгу; редакти�
     }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
-  await page.getByRole('button', { name: 'Коллекции', exact: true }).click();
   await page
+    .getByRole('button', { name: 'Управлять коллекциями', exact: true })
+    .click();
+  await page
+    .getByRole('dialog')
     .getByRole('button', { name: 'Создать коллекцию', exact: true })
     .click();
   await page
@@ -99,7 +102,9 @@ test('удаление файла сохраняет книгу; редакти�
   await expect(
     page.getByRole('heading', { name: 'Коллекция два', exact: true }),
   ).toBeVisible();
-  await expect(page.getByText('0 книг', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('dialog').getByText('0 книг', { exact: true }),
+  ).toBeVisible();
   await page
     .getByRole('button', { name: 'Удалить коллекцию «Коллекция два»' })
     .click();

@@ -11,6 +11,7 @@ import {
 } from '../../domain/library';
 import { Icon } from '../../ui/Icon';
 import { ContinueReading } from './ContinueReading';
+import { WeeklyReading } from './WeeklyReading';
 import type { ReadingPosition } from '../../domain/model';
 import { Button } from '../../ui/Button';
 import { Dialog } from '../../ui/Dialog';
@@ -146,20 +147,24 @@ export function Library({
   return (
     <div className="library-feature">
       <div className="library-actions">
-        <p className="caption">
-          {snapshot
-            ? formatCount(snapshot.books.length, ['книга', 'книги', 'книг'])
-            : 'Личная библиотека'}{' '}
-          <span className="local-label">· на этом устройстве</span>
-        </p>
+        <TextField
+          label="Поиск по библиотеке"
+          type="search"
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+          }}
+          placeholder="Название, автор, жанр или ISBN"
+        />
         <Button
+          aria-label="Добавить"
           disabled={!snapshot || Boolean(loadError)}
           onClick={() => {
             setAddOpen(true);
           }}
         >
           <Icon name="plus" />
-          Добавить
+          <span>Добавить</span>
         </Button>
       </div>
       {error && !selectedBook && (
@@ -168,13 +173,16 @@ export function Library({
         </p>
       )}
       {snapshot && (
-        <ContinueReading
-          snapshot={snapshot}
-          positions={positions}
-          onRead={(bookId, fileId, readingId) => {
-            window.location.hash = readerUrl({ bookId, fileId, readingId });
-          }}
-        />
+        <div className="library-highlights">
+          <ContinueReading
+            snapshot={snapshot}
+            positions={positions}
+            onRead={(bookId, fileId, readingId) => {
+              window.location.hash = readerUrl({ bookId, fileId, readingId });
+            }}
+          />
+          <WeeklyReading store={store} />
+        </div>
       )}
       {loadError && (
         <div className="surface form-stack error-surface">
@@ -197,34 +205,18 @@ export function Library({
       )}
       {!snapshot && !loadError && <p role="status">Загружаем библиотеку…</p>}
       {snapshot && (
-        <>
+        <div className="library-shelf">
           {snapshot.books.length > 0 && (
             <>
               <div className="library-toolbar">
-                <TextField
-                  label="Поиск по библиотеке"
-                  type="search"
-                  value={query}
-                  onChange={(event) => {
-                    setQuery(event.target.value);
-                  }}
-                  placeholder="Название, автор, жанр или ISBN"
-                />
-                <Button
-                  variant="quiet"
-                  onClick={() => {
-                    setCollectionsOpen(true);
-                  }}
-                >
-                  Коллекции
-                </Button>
                 <Button
                   variant="secondary"
                   onClick={() => {
                     setFiltersOpen(true);
                   }}
                 >
-                  Фильтры и сортировка
+                  <Icon name="settings" />
+                  <span className="visually-hidden">Фильтры и сортировка</span>
                   {(status !== 'all' ||
                     selectedCollection ||
                     sort !== 'newest') && <span> · применены</span>}
@@ -306,9 +298,9 @@ export function Library({
               >
                 {(
                   [
-                    ['all', 'Все'],
+                    ['all', 'Все книги'],
                     ['active', 'Читаю'],
-                    ['planned', 'В планах'],
+                    ['planned', 'Хочу прочитать'],
                     ['finished', 'Прочитано'],
                   ] as const
                 ).map(([value, label]) => (
@@ -487,7 +479,60 @@ export function Library({
               )}
             </div>
           )}
-        </>
+        </div>
+      )}
+      {snapshot && snapshot.books.length > 0 && (
+        <section
+          className="library-collections"
+          aria-label="Коллекции библиотеки"
+        >
+          <div className="section-heading">
+            <h2>Коллекции</h2>
+            <Button
+              variant="quiet"
+              onClick={() => {
+                setCollectionsOpen(true);
+              }}
+            >
+              Управлять коллекциями
+            </Button>
+          </div>
+          <div className="collection-tiles">
+            {snapshot.collections.map((collection) => (
+              <Button
+                key={collection.id}
+                variant="quiet"
+                aria-pressed={collectionId === collection.id}
+                onClick={() => {
+                  setCollectionId(collection.id);
+                }}
+              >
+                <Icon name="library" />
+                <span>
+                  <strong>{collection.name}</strong>
+                  <small>
+                    {formatCount(collection.bookIds.length, [
+                      'книга',
+                      'книги',
+                      'книг',
+                    ])}
+                  </small>
+                </span>
+                <Icon name="arrow" />
+              </Button>
+            ))}
+            {snapshot.collections.length === 0 && (
+              <Button
+                variant="quiet"
+                onClick={() => {
+                  setCollectionEditor('new');
+                }}
+              >
+                <Icon name="plus" /> Создать коллекцию
+              </Button>
+            )}
+          </div>
+        </section>
       )}
       {addOpen && (
         <Dialog
@@ -545,78 +590,82 @@ export function Library({
           </div>
         </Dialog>
       )}
-      {selectedBook && !confirmation && (
-        <BookView
-          book={selectedBook}
-          readings={snapshot?.readings ?? []}
-          files={snapshot?.files ?? []}
-          onClose={() => {
-            const id = selectedBook.id;
-            setSelected(null);
-            requestAnimationFrame(() => {
-              document
-                .querySelector<HTMLElement>(`[data-book-id="${id}"] button`)
-                ?.focus({ preventScroll: true });
-            });
-          }}
-          busy={busy}
-          error={error}
-          onEdit={() => {
-            setBookEditor(selectedBook);
-            setSelected(null);
-          }}
-          onReading={(reading) => {
-            setReadingEditor(reading);
-            setSelected(null);
-          }}
-          onReread={() => {
-            void perform(() => store.addReading(selectedBook.id));
-          }}
-          onImport={(format) => {
-            setImportFormat(format);
-            setImportTarget(selectedBook.id);
-            setSelected(null);
-          }}
-          onRead={(fileId, readingId) => {
-            void perform(async () => {
-              const activeId =
-                readingId ?? (await store.addReading(selectedBook.id)).id;
-              // Remove the native modal backdrop before iOS samples the reader's status-bar tint.
-              for (const dialog of document.querySelectorAll<HTMLDialogElement>(
-                'dialog[open]',
-              ))
-                dialog.close();
+      {selectedBook &&
+        !confirmation &&
+        !bookEditor &&
+        !readingEditor &&
+        !importTarget && (
+          <BookView
+            book={selectedBook}
+            readings={snapshot?.readings ?? []}
+            files={snapshot?.files ?? []}
+            onClose={() => {
+              const id = selectedBook.id;
               setSelected(null);
-              window.location.hash = readerUrl({
-                bookId: selectedBook.id,
-                fileId,
-                readingId: activeId,
+              requestAnimationFrame(() => {
+                document
+                  .querySelector<HTMLElement>(`[data-book-id="${id}"] button`)
+                  ?.focus({ preventScroll: true });
               });
-            });
-          }}
-          onRemoveBook={() => {
-            setError(null);
-            setConfirmation({
-              type: 'book',
-              id: selectedBook.id,
-              title: selectedBook.title,
-            });
-          }}
-          onRemoveFile={(id) => {
-            setError(null);
-            setConfirmation({
-              type: 'file',
-              id,
-              bookId: selectedBook.id,
-              format:
-                snapshot?.files.find((file) => file.id === id)?.mediaType ===
-                'application/x-fictionbook+xml'
-                  ? 'FB2'
-                  : 'EPUB',
-            });
-          }}
-        />
-      )}
+            }}
+            busy={busy}
+            error={error}
+            onEdit={() => {
+              setBookEditor(selectedBook);
+              setSelected(null);
+            }}
+            onReading={(reading) => {
+              setReadingEditor(reading);
+              setSelected(null);
+            }}
+            onReread={() => {
+              void perform(() => store.addReading(selectedBook.id));
+            }}
+            onImport={(format) => {
+              setImportFormat(format);
+              setImportTarget(selectedBook.id);
+              setSelected(null);
+            }}
+            onRead={(fileId, readingId) => {
+              void perform(async () => {
+                const activeId =
+                  readingId ?? (await store.addReading(selectedBook.id)).id;
+                // Remove the native modal backdrop before iOS samples the reader's status-bar tint.
+                for (const dialog of document.querySelectorAll<HTMLDialogElement>(
+                  'dialog[open]',
+                ))
+                  dialog.close();
+                setSelected(null);
+                window.location.hash = readerUrl({
+                  bookId: selectedBook.id,
+                  fileId,
+                  readingId: activeId,
+                });
+              });
+            }}
+            onRemoveBook={() => {
+              setError(null);
+              setConfirmation({
+                type: 'book',
+                id: selectedBook.id,
+                title: selectedBook.title,
+              });
+            }}
+            onRemoveFile={(id) => {
+              setError(null);
+              setConfirmation({
+                type: 'file',
+                id,
+                bookId: selectedBook.id,
+                format:
+                  snapshot?.files.find((file) => file.id === id)?.mediaType ===
+                  'application/x-fictionbook+xml'
+                    ? 'FB2'
+                    : 'EPUB',
+              });
+            }}
+          />
+        )}
       {selected && snapshot && !selectedBook && !confirmation && (
         <Dialog
           open

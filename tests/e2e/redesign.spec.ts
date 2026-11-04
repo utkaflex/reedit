@@ -69,7 +69,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
     await expect(
       page.getByRole('button', { name: 'Добавить', exact: true }),
     ).toBeEnabled();
-    await expect(page.getByLabel('Поиск по библиотеке')).toHaveCount(0);
+    await expect(page.getByLabel('Поиск по библиотеке')).toBeVisible();
     await page.screenshot({
       path: test.info().outputPath('library-empty.png'),
       scale: 'css',
@@ -260,6 +260,10 @@ for (const width of [390, 1440]) {
     await expect(
       page.getByRole('region', { name: 'Продолжить чтение', exact: true }),
     ).toBeVisible();
+    await page.screenshot({
+      path: test.info().outputPath('library-continue.png'),
+      scale: 'css',
+    });
     await page.goto('/#/quotes');
     await expect(page.locator('.saved-fragment')).toHaveCount(1);
     await page.screenshot({

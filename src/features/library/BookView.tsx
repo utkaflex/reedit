@@ -11,6 +11,7 @@ import { useBlobUrl } from '../../ui/useBlobUrl';
 import { BookCard } from '../../ui/BookCard';
 import { BookCover } from '../../ui/BookCover';
 import { Dialog } from '../../ui/Dialog';
+import { Icon } from '../../ui/Icon';
 import { Button } from '../../ui/Button';
 import { formatCount } from '../../ui/format';
 import { SelectField } from '../../ui/FormControls';
@@ -46,6 +47,21 @@ export function LibraryCard({
         {statusLabels[reading?.status ?? 'planned']}
         {reading?.rating ? ` · ${reading.rating.toLocaleString('ru')} / 5` : ''}
       </p>
+      <details className="book-card-menu">
+        <summary aria-label={`Действия с книгой «${book.title}»`}>
+          <Icon name="more" />
+        </summary>
+        <div>
+          <Button variant="quiet" onClick={onOpen}>
+            О книге
+          </Button>
+          {onRead && (
+            <Button variant="quiet" onClick={onRead}>
+              Открыть для чтения
+            </Button>
+          )}
+        </div>
+      </details>
       {onRead && (
         <Button
           className="book-quick-read"

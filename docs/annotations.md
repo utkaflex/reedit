@@ -51,3 +51,7 @@ V6 добавляет индексы bookId/createdAt для annotations/bookmar
 Добавлены: `src/domain/annotations.ts`, `src/services/annotations.ts`, `src/features/annotations/SavedNotes.tsx`, `src/features/annotations/ReaderAnnotations.tsx`, `src/features/annotations/annotations.css`, `tests/e2e/annotations.spec.ts`, этот документ.
 
 Изменены: `src/domain/model.ts`, `src/domain/reader.ts`, `src/domain/repositories.ts`, `src/domain/rules.ts`; `src/infrastructure/database.ts`, `src/infrastructure/local-store.ts`, `src/infrastructure/epub/PositionResolver.ts`, `src/infrastructure/epub/reader.ts`; `src/services/reader.ts`; `src/features/reader/ReaderScreen.tsx`, `src/features/library/BookView.tsx`, `src/features/shell/App.tsx`, `src/features/shell/navigation.ts`; `src/ui/AppShell.tsx`, `src/ui/Icon.tsx`, `src/ui/Dialog.tsx`, `src/ui/styles.css`; `tests/epub-import.test.ts`, `tests/text-position.test.ts`, `tests/store.test.ts`, `tests/library.test.ts`; `README.md`, `docs/architecture.md`, `docs/data-model.md`, `docs/decisions.md`, `docs/design-system.md`, `docs/development.md`, `docs/roadmap.md`.
+
+## Повторная приёмка standalone PWA · v2
+
+Предыдущее исправление не помогло на физическом iPhone пользователя. Обработка прямого touchend, видимости верхнего документа и CSS издателя описана в [отчёте v2](redesign-v2-2026-11-04.md). Автоматические проверки не заменяют повторное выделение и касание в установленной PWA. Схема и сохранённые цитаты не менялись.

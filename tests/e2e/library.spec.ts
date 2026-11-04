@@ -73,8 +73,11 @@ test('книга, локальная обложка, отзыв, оценка и
     page.getByText('Оценка: 4,5 / 5', { exact: true }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
-  await page.getByRole('button', { name: 'Коллекции', exact: true }).click();
   await page
+    .getByRole('button', { name: 'Управлять коллекциями', exact: true })
+    .click();
+  await page
+    .getByRole('dialog')
     .getByRole('button', { name: 'Создать коллекцию', exact: true })
     .click();
   await page
@@ -102,7 +105,7 @@ test('книга, локальная обложка, отзыв, оценка и
   await books
     .getByRole('button', { name: /Тестовая книга с обложкой/ })
     .click();
-  await page.getByText('О книге', { exact: true }).click();
+  await page.getByRole('dialog').getByText('О книге', { exact: true }).click();
   await expect(
     page.getByText('Сохранённое описание', { exact: true }),
   ).toBeVisible();

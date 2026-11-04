@@ -88,6 +88,9 @@ export async function probeReader(
     });
     const frame = host.querySelector('iframe');
     const paragraph = frame?.contentDocument?.querySelector('p');
+    const userSelect = paragraph
+      ? frame?.contentWindow?.getComputedStyle(paragraph).userSelect
+      : '';
     const letterSpacing = paragraph
       ? frame?.contentWindow?.getComputedStyle(paragraph).letterSpacing
       : '';
@@ -113,7 +116,14 @@ export async function probeReader(
         }),
       ]);
     }
-    return { ready: true, stages, error: '', letterSpacing, selectedQuote };
+    return {
+      ready: true,
+      stages,
+      error: '',
+      letterSpacing,
+      selectedQuote,
+      userSelect,
+    };
   } catch (error) {
     return {
       ready: false,

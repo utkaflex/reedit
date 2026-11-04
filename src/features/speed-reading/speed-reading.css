@@ -193,3 +193,23 @@
     display: none;
   }
 }
+
+.speed-word-highlight {
+  background: #9272ed44;
+  border-bottom-color: #694bdc;
+}
+.speed-controls {
+  background: var(--color-accent-soft);
+  border-radius: 18px;
+  padding: 12px 16px;
+}
+.speed-status {
+  font-size: 12px;
+}
+.speed-buttons .button {
+  font-size: 13px;
+}
+.reader-progress-row > .button {
+  min-height: 44px;
+  font-size: 12px;
+}
