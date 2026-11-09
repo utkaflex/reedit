@@ -23,9 +23,9 @@
   --color-text: #eeeee6;
   --color-muted: #a5aca0;
   --color-border: #3a4037;
-  --color-accent: #b8a4ff;
-  --color-accent-soft: #2d2542;
-  --color-on-accent: #211638;
+  --color-accent: #f4aa91;
+  --color-accent-soft: #3b2c25;
+  --color-on-accent: #331c14;
   color-scheme: dark;
 }
 .reader-screen[data-reader-theme='sepia'] {
@@ -36,8 +36,8 @@
   --color-text: #403627;
   --color-muted: #6a604d;
   --color-border: #cabea5;
-  --color-accent: #6250a5;
-  --color-accent-soft: #e1dbc5;
+  --color-accent: #713928;
+  --color-accent-soft: #e9d6be;
   --color-on-accent: #ffffff;
   color-scheme: light;
 }
@@ -45,8 +45,8 @@
   --color-text: #252a27;
   --color-muted: #686c65;
   --color-border: #dcdfd6;
-  --color-accent: #694bdc;
-  --color-accent-soft: #f0ecfc;
+  --color-accent: #8f3c2c;
+  --color-accent-soft: #f3e3d9;
   --color-on-accent: #ffffff;
   --color-subtle: #eeede7;
   color-scheme: light;
@@ -428,12 +428,6 @@
   font-weight: 600;
   border-left: 3px solid var(--color-accent);
 }
-.reader-navigation .reader-save-state {
-  font-size: 12px;
-  line-height: 1.3;
-  min-height: 44px;
-  padding: 6px;
-}
 @media (min-width: 1000px) {
   .reader-stage {
     background: var(--reader-paper);
@@ -449,4 +443,52 @@
 }
 .reader-message > p {
   max-width: 34rem;
+}
+
+.reader-bottom {
+  background: var(--color-surface);
+  padding: 8px max(12px, env(safe-area-inset-right)) 4px
+    max(12px, env(safe-area-inset-left));
+}
+.reader-footer-content {
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 8px;
+}
+.reader-navigation {
+  width: max-content;
+  gap: 0;
+  background: var(--color-subtle);
+  border-radius: var(--radius-md);
+}
+.reader-navigation .button {
+  min-width: 44px;
+  padding: 0;
+}
+.reader-confirm {
+  justify-self: end;
+  font-size: var(--text-xs);
+}
+.reader-actions {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+}
+.reader-actions .button {
+  padding-inline: 6px;
+  font-size: var(--text-xs);
+}
+.reader-save-state {
+  overflow-wrap: anywhere;
+  font-size: var(--text-xs);
+}
+.reader-show-controls {
+  max-width: 100%;
+  white-space: normal;
+}
+@media (max-width: 359px) {
+  .reader-confirm span {
+    display: inline;
+  }
 }

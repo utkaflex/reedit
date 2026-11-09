@@ -126,6 +126,7 @@ export function BackupSettings({
       aria-labelledby="backup-title"
     >
       <h2 id="backup-title">Данные и приложение</h2>
+      <h3 className="settings-group-label">Хранение и копии</h3>
       <div className="form-stack">
         <DisclosureRow
           title="Данные на устройстве"
@@ -332,6 +333,7 @@ export function BackupSettings({
             </label>
           </section>
         </DisclosureRow>
+        <h3 className="settings-group-label">На этом устройстве</h3>
         <DisclosureRow
           title="Работа офлайн"
           icon="device"

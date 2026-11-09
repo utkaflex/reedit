@@ -27,7 +27,7 @@ export function EpubImportDialog({
   books: Book[];
   target: Id | null;
   onClose: () => void;
-  onSaved: (id: Id) => Promise<void>;
+  onSaved: (id: Id, openFile?: Id) => Promise<void>;
 }) {
   const [detected, setDetected] = useState<'epub' | 'fb2' | 'auto'>(format);
   const label =
@@ -112,7 +112,7 @@ export function EpubImportDialog({
       lock.current = false;
     }
   };
-  const save = async () => {
+  const save = async (openAfter = false) => {
     if (!analysis || lock.current || !controller.current) return;
     const selected = books.find((book) => book.id === bookId);
     if (bookId !== 'new' && !selected) {
@@ -140,7 +140,8 @@ export function EpubImportDialog({
         const file = await store.findEpubByHash(analysis.sha256);
         setExisting(file ?? null);
         setPhase('duplicate');
-      } else await onSaved(result.bookId);
+      } else
+        await onSaved(result.bookId, openAfter ? result.fileId : undefined);
     } catch (reason) {
       if (reason instanceof EpubImportError && reason.code === 'cancelled')
         setPhase('cancelled');
@@ -173,16 +174,27 @@ export function EpubImportDialog({
       footer={
         <div className="form-actions">
           {phase === 'review' && (
-            <Button
-              onClick={() => {
-                void save();
-              }}
-              disabled={!title.trim() && bookId === 'new'}
-            >
-              {bookId === 'new'
-                ? `Создать книгу и сохранить ${label}`
-                : `Прикрепить ${label}`}
-            </Button>
+            <>
+              <Button
+                onClick={() => {
+                  void save(true);
+                }}
+                disabled={!title.trim() && bookId === 'new'}
+              >
+                {bookId === 'new' ? 'Добавить и читать' : 'Прикрепить и читать'}
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  void save();
+                }}
+                disabled={!title.trim() && bookId === 'new'}
+              >
+                {bookId === 'new'
+                  ? `Создать книгу и сохранить ${label}`
+                  : `Прикрепить ${label}`}
+              </Button>
+            </>
           )}
           <Button variant="quiet" onClick={cancel}>
             {busy ? 'Отменить импорт' : 'Закрыть импорт'}
@@ -266,13 +278,23 @@ export function EpubImportDialog({
               месте.
             </p>
             {existing && (
-              <Button
-                onClick={() => {
-                  void onSaved(existing.bookId);
-                }}
-              >
-                Открыть книгу с этим {label}
-              </Button>
+              <>
+                <Button
+                  onClick={() => {
+                    void onSaved(existing.bookId, existing.id);
+                  }}
+                >
+                  Читать сохранённую книгу
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    void onSaved(existing.bookId);
+                  }}
+                >
+                  Открыть книгу с этим {label}
+                </Button>
+              </>
             )}
           </div>
         )}

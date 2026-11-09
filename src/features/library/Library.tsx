@@ -214,16 +214,18 @@ export function Library({
             <>
               <div className="library-toolbar">
                 <Button
+                  aria-label={`Фильтры и сортировка · ${status === 'all' ? 'Все книги' : statusLabels[status as Reading['status']]}`}
                   variant="secondary"
                   onClick={() => {
                     setFiltersOpen(true);
                   }}
                 >
-                  <Icon name="settings" />
-                  <span className="visually-hidden">Фильтры и сортировка</span>
-                  {(status !== 'all' ||
-                    selectedCollection ||
-                    sort !== 'newest') && <span> · применены</span>}
+                  <Icon name="filter" />
+                  <span className="library-filter-label">
+                    {status === 'all'
+                      ? 'Все книги'
+                      : statusLabels[status as Reading['status']]}
+                  </span>
                 </Button>
                 {filtersOpen && (
                   <Dialog
@@ -560,7 +562,6 @@ export function Library({
                 <strong>Загрузить EPUB или FB2</strong>
                 <small>С устройства · файл останется у вас</small>
               </span>
-              <Icon name="arrow" />
             </Button>
             <Button
               variant="quiet"
@@ -572,9 +573,8 @@ export function Library({
               <Icon name="search" />
               <span>
                 <strong>Найти в каталоге</strong>
-                <small>Название, автор или ISBN</small>
+                <small>Карточка по названию, автору или ISBN · без файла</small>
               </span>
-              <Icon name="arrow" />
             </Button>
             <Button
               variant="quiet"
@@ -588,7 +588,6 @@ export function Library({
                 <strong>Добавить вручную</strong>
                 <small>В том числе бумажную книгу</small>
               </span>
-              <Icon name="arrow" />
             </Button>
             <Button
               variant="quiet"
@@ -602,7 +601,6 @@ export function Library({
                 <strong>Коллекции</strong>
                 <small>Собрать книги по темам</small>
               </span>
-              <Icon name="arrow" />
             </Button>
           </div>
         </Dialog>
@@ -837,7 +835,33 @@ export function Library({
             if (importTarget !== 'new') setSelected(importTarget);
             setImportTarget(null);
           }}
-          onSaved={async (id) => {
+          onSaved={async (id, openFile) => {
+            if (openFile) {
+              try {
+                const data = await store.readLibrary();
+                const reading =
+                  latestReading(data.readings, id) ??
+                  (await store.addReading(id));
+                document
+                  .querySelector<HTMLDialogElement>(
+                    'dialog.import-dialog[open]',
+                  )
+                  ?.close();
+                setImportTarget(null);
+                window.location.hash = readerUrl({
+                  bookId: id,
+                  fileId: openFile,
+                  readingId: reading.id,
+                });
+                return;
+              } catch (reason) {
+                setError(
+                  reason instanceof Error
+                    ? reason.message
+                    : 'Не удалось открыть файл.',
+                );
+              }
+            }
             await reload();
             setImportTarget(null);
             setSelected(id);

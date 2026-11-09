@@ -564,15 +564,6 @@ export function ReaderScreen({
                 <span className="reader-chapter" title={location?.chapter}>
                   {location?.chapter ?? 'Подготовка'}
                 </span>
-                <Button
-                  variant="quiet"
-                  disabled={state !== 'ready' || busy}
-                  onClick={() => {
-                    setSpeedChooser(true);
-                  }}
-                >
-                  Скорочтение
-                </Button>
                 <span
                   aria-label="Позиция в читаемом тексте"
                   title="Прогресс до якоря видимого фрагмента, по текстовому объёму"
@@ -588,15 +579,19 @@ export function ReaderScreen({
               <Button
                 variant="quiet"
                 className="reader-confirm"
-                aria-label="Фрагмент прочитан"
+                aria-label="Отметить фрагмент прочитанным"
                 disabled={!activity.canConfirm || busy}
                 onClick={activity.confirm}
                 title="Я прочитал видимый фрагмент. Перелистывания сами по себе не учитывают прочитанные слова."
               >
                 <Icon name="check" />
-                <span>Прочитано</span>
+                <span>Отметить прочитанным</span>
               </Button>
-              <div className="reader-navigation">
+              <div
+                className="reader-navigation"
+                role="group"
+                aria-label="Перелистывание"
+              >
                 <Button
                   variant="quiet"
                   aria-label={
@@ -609,28 +604,7 @@ export function ReaderScreen({
                     command((reader) => reader.previous());
                   }}
                 >
-                  <Icon name="back" />
-                </Button>
-                <Button
-                  variant="quiet"
-                  className="reader-save-state"
-                  aria-label="Скрыть панели"
-                  title="Скрыть панели. Коснитесь центра страницы, чтобы вернуть их."
-                  onClick={() => {
-                    setControls(false);
-                  }}
-                >
-                  {state === 'loading'
-                    ? 'Открываем книгу…'
-                    : state === 'error'
-                      ? 'Чтение недоступно'
-                      : busy
-                        ? 'Обновляем страницу…'
-                        : saving === 'saving'
-                          ? 'Сохраняем позицию…'
-                          : saving === 'error'
-                            ? 'Позиция не сохранена'
-                            : 'Позиция сохранена'}
+                  <Icon name="previous" />
                 </Button>
                 <Button
                   variant="quiet"
@@ -644,7 +618,42 @@ export function ReaderScreen({
                     command((reader) => reader.next());
                   }}
                 >
-                  <Icon name="arrow" />
+                  <Icon name="next" />
+                </Button>
+              </div>
+              <div className="reader-actions">
+                <Button
+                  variant="quiet"
+                  disabled={state !== 'ready' || busy}
+                  onClick={() => {
+                    setSpeedChooser(true);
+                  }}
+                >
+                  Режимы чтения
+                </Button>
+                <span className="reader-save-state" role="status">
+                  {state === 'loading'
+                    ? 'Открываем книгу…'
+                    : state === 'error'
+                      ? 'Чтение недоступно'
+                      : busy
+                        ? 'Обновляем страницу…'
+                        : saving === 'saving'
+                          ? 'Сохраняем позицию…'
+                          : saving === 'error'
+                            ? 'Позиция не сохранена'
+                            : 'Позиция сохранена'}
+                </span>
+                <Button
+                  variant="quiet"
+                  className="icon-button"
+                  aria-label="Скрыть панели"
+                  title="Скрыть панели"
+                  onClick={() => {
+                    setControls(false);
+                  }}
+                >
+                  <Icon name="hide" />
                 </Button>
               </div>
             </div>
@@ -726,7 +735,7 @@ export function ReaderScreen({
                 speed.run((session) => session.open('rsvp'));
               }}
             >
-              RSVP — по одному слову
+              По одному слову
             </Button>
             <Button
               variant="secondary"
@@ -736,7 +745,7 @@ export function ReaderScreen({
                 speed.run((session) => session.open('guided'));
               }}
             >
-              Guided Reading — в тексте
+              С подсветкой текста
             </Button>
           </div>
         </Dialog>

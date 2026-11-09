@@ -1149,7 +1149,7 @@ h2 {
   color: var(--color-muted);
 }
 .disclosure-row[open] > summary > .icon:last-child {
-  rotate: 90deg;
+  rotate: 180deg;
 }
 .disclosure-row__body {
   padding: 4px 0 16px;
@@ -1274,5 +1274,62 @@ h2 {
   }
   .settings-stack {
     gap: 24px;
+  }
+}
+
+/* Editorial hierarchy shared by the library, journal and settings. */
+.page-header h1 {
+  font-family: var(--font-editorial);
+  font-weight: 500;
+  letter-spacing: -0.035em;
+}
+.button,
+.segmented__option span {
+  min-height: 44px;
+}
+.navigation .icon {
+  flex-shrink: 0;
+}
+.disclosure-row > summary > .icon:last-child {
+  color: var(--color-muted);
+}
+.action-disclosure > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.action-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.action-disclosure[open] > summary {
+  margin-bottom: var(--space-2);
+}
+.action-disclosure__body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.settings-group-label {
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+  font-weight: 600;
+  margin-block: var(--space-3) var(--space-2);
+}
+@media (max-width: 899px), (max-height: 599px) {
+  .navigation,
+  .app-content {
+    container-type: inline-size;
+  }
+  @container (max-width: 18rem) {
+    .navigation a {
+      grid-column: span 2;
+      flex-direction: row;
+      gap: var(--space-1);
+      padding-inline: 4px;
+      font-size: 0.6875rem;
+    }
+    .navigation a > span {
+      overflow-wrap: normal;
+    }
   }
 }

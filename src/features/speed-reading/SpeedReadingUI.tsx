@@ -120,7 +120,7 @@ export function SpeedControls({
         value={snapshot.ordinal}
       />
       {snapshot.mode === 'guided' && (
-        <p className="caption">Guided Reading · коснитесь текста для паузы</p>
+        <p className="caption">С подсветкой текста · касание ставит на паузу</p>
       )}
       <div className="speed-buttons speed-transport">
         <Button
@@ -133,7 +133,7 @@ export function SpeedControls({
             run((session) => session.seek('back'));
           }}
         >
-          <Icon name="back" />
+          <Icon name="previous" />
         </Button>
         <Button
           className="speed-play"
@@ -163,7 +163,7 @@ export function SpeedControls({
             run((session) => session.seek('forward'));
           }}
         >
-          <Icon name="arrow" />
+          <Icon name="next" />
         </Button>
         <Button
           variant="quiet"
@@ -196,7 +196,7 @@ export function SpeedControls({
             run((session) => session.stop());
           }}
         >
-          <Icon name="book" /> Обычное чтение
+          <Icon name="book" /> Вернуться к тексту
         </Button>
       </div>
       {snapshot.error && (

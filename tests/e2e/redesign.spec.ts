@@ -207,10 +207,10 @@ for (const width of [390, 1440]) {
       scale: 'css',
     });
     await page
-      .getByRole('button', { name: 'Скорочтение', exact: true })
+      .getByRole('button', { name: 'Режимы чтения', exact: true })
       .click();
     await page
-      .getByRole('button', { name: 'RSVP — по одному слову', exact: true })
+      .getByRole('button', { name: 'По одному слову', exact: true })
       .click();
     await expect(
       page.getByLabel('Текущее слово', { exact: true }),
@@ -220,7 +220,7 @@ for (const width of [390, 1440]) {
       scale: 'css',
     });
     await page
-      .getByRole('button', { name: 'Обычное чтение', exact: true })
+      .getByRole('button', { name: 'Вернуться к тексту', exact: true })
       .click();
     await expect(page.locator('.speed-word-highlight')).toHaveCount(0);
     await expect(

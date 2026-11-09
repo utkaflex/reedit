@@ -196,7 +196,7 @@
 
 .speed-word-highlight {
   background: #9272ed44;
-  border-bottom-color: #694bdc;
+  border-bottom-color: var(--color-accent);
 }
 .speed-controls {
   background: var(--color-accent-soft);

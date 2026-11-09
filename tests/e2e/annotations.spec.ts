@@ -234,6 +234,7 @@ test('цитата, комментарий, цвет, закладка, эксп
   await expect(
     page.getByText('Вернуться к этой мысли', { exact: true }),
   ).toBeVisible();
+  await page.getByLabel('Действия записи', { exact: true }).click();
   await page
     .getByRole('button', { name: 'Редактировать', exact: true })
     .click();
@@ -249,6 +250,7 @@ test('цитата, комментарий, цвет, закладка, эксп
     fullPage: true,
     scale: 'css',
   });
+  await page.locator('.notes-export > summary').click();
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Экспорт Markdown' }).click();
   expect((await download).suggestedFilename()).toBe('reedit-quotes.md');
@@ -280,6 +282,7 @@ test('цитата, комментарий, цвет, закладка, эксп
   await expect(
     page.getByRole('heading', { name: 'Моя закладка' }),
   ).toBeVisible();
+  await page.getByLabel('Действия записи', { exact: true }).click();
   await page
     .getByRole('button', { name: 'Редактировать', exact: true })
     .click();
@@ -288,6 +291,9 @@ test('цитата, комментарий, цвет, закладка, эксп
     .fill('Новое имя');
   await page.getByRole('button', { name: 'Сохранить изменения' }).click();
   await expect(page.getByRole('heading', { name: 'Новое имя' })).toBeVisible();
+  const actions = page.locator('.saved-fragment .action-disclosure');
+  if ((await actions.getAttribute('open')) === null)
+    await page.getByLabel('Действия записи', { exact: true }).click();
   await page.getByRole('button', { name: 'Удалить', exact: true }).click();
   await page
     .getByRole('button', { name: 'Удалить фрагмент', exact: true })

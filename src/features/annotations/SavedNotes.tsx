@@ -1,3 +1,4 @@
+import { Icon } from '../../ui/Icon';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   Annotation,
@@ -319,29 +320,34 @@ export function SavedNotes({
         </EmptyState>
       )}
       {kind === 'quotes' && filtered.length > 0 && (
-        <div className="notes-actions">
-          {(['markdown', 'text'] as const).map((format) => (
-            <Button
-              key={format}
-              variant="secondary"
-              onClick={() => {
-                if (data)
-                  downloadAnnotations(
-                    exportAnnotations(
-                      filtered.filter(
-                        (item): item is Annotation => 'quote' in item,
+        <details className="action-disclosure notes-export">
+          <summary className="button button--secondary">
+            Экспорт <Icon name="expand" />
+          </summary>
+          <div className="action-disclosure__body">
+            {(['markdown', 'text'] as const).map((format) => (
+              <Button
+                key={format}
+                variant="secondary"
+                onClick={() => {
+                  if (data)
+                    downloadAnnotations(
+                      exportAnnotations(
+                        filtered.filter(
+                          (item): item is Annotation => 'quote' in item,
+                        ),
+                        data.books,
+                        format,
                       ),
-                      data.books,
                       format,
-                    ),
-                    format,
-                  );
-              }}
-            >
-              Экспорт {format === 'markdown' ? 'Markdown' : 'TXT'}
-            </Button>
-          ))}
-        </div>
+                    );
+                }}
+              >
+                Экспорт {format === 'markdown' ? 'Markdown' : 'TXT'}
+              </Button>
+            ))}
+          </div>
+        </details>
       )}
       <ul className="notes-list">
         {filtered.map((item) => {
@@ -365,6 +371,14 @@ export function SavedNotes({
                 } as React.CSSProperties
               }
             >
+              {'quote' in item ? (
+                <>
+                  <blockquote>{item.quote}</blockquote>
+                  {item.note && <p className="saved-comment">{item.note}</p>}
+                </>
+              ) : (
+                <h3>{item.label || 'Закладка'}</h3>
+              )}
               <p className="caption">
                 {data?.books.find((b) => b.id === item.bookId)?.title ??
                   'Книга'}{' '}
@@ -376,14 +390,6 @@ export function SavedNotes({
               {source && source.authors.length > 0 && (
                 <p className="caption">{source.authors.join(', ')}</p>
               )}
-              {'quote' in item ? (
-                <>
-                  <blockquote>{item.quote}</blockquote>
-                  {item.note && <p className="saved-comment">{item.note}</p>}
-                </>
-              ) : (
-                <h3>{item.label || 'Закладка'}</h3>
-              )}
               <div className="notes-actions">
                 <Button
                   variant="quiet"
@@ -394,28 +400,38 @@ export function SavedNotes({
                 >
                   К месту в книге
                 </Button>
-                <Button
-                  variant="quiet"
-                  disabled={busy}
-                  onClick={() => {
-                    setEditing(item);
-                    setComment('quote' in item ? item.note : item.label);
-                    setEditColor(
-                      'quote' in item ? (item.color ?? 'yellow') : 'yellow',
-                    );
-                  }}
-                >
-                  Редактировать
-                </Button>
-                <Button
-                  variant="quiet"
-                  disabled={busy}
-                  onClick={() => {
-                    setRemoving(item);
-                  }}
-                >
-                  Удалить
-                </Button>
+                <details className="action-disclosure">
+                  <summary
+                    className="button button--quiet"
+                    aria-label="Действия записи"
+                  >
+                    <Icon name="more" />
+                  </summary>
+                  <div className="action-disclosure__body">
+                    <Button
+                      variant="quiet"
+                      disabled={busy}
+                      onClick={() => {
+                        setEditing(item);
+                        setComment('quote' in item ? item.note : item.label);
+                        setEditColor(
+                          'quote' in item ? (item.color ?? 'yellow') : 'yellow',
+                        );
+                      }}
+                    >
+                      Редактировать
+                    </Button>
+                    <Button
+                      variant="quiet"
+                      disabled={busy}
+                      onClick={() => {
+                        setRemoving(item);
+                      }}
+                    >
+                      Удалить
+                    </Button>
+                  </div>
+                </details>
               </div>
               {(!file || !item.anchor) && (
                 <p className="caption">

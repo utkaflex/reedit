@@ -155,7 +155,7 @@ test('время и слова трёх режимов сохраняются; �
     .click();
   await page.getByRole('button', { name: 'Читать файл stats.epub' }).click();
   const speedButton = page.getByRole('button', {
-    name: 'Скорочтение',
+    name: 'Режимы чтения',
     exact: true,
   });
   await expect(speedButton).toBeEnabled({ timeout: 20000 });
@@ -169,7 +169,7 @@ test('время и слова трёх режимов сохраняются; �
     .click();
   expect((await totals(page)).words).toBe(0);
   const confirm = page.getByRole('button', {
-    name: 'Фрагмент прочитан',
+    name: 'Отметить фрагмент прочитанным',
     exact: true,
   });
   await expect(confirm).toBeEnabled({ timeout: 15000 });
@@ -180,7 +180,7 @@ test('время и слова трёх режимов сохраняются; �
     .toBeGreaterThan(0);
   const normal = (await totals(page)).words;
   await speedButton.click();
-  await page.getByRole('button', { name: 'RSVP — по одному слову' }).click();
+  await page.getByRole('button', { name: 'По одному слову' }).click();
   await expect(
     page.getByRole('button', { name: 'Продолжить', exact: true }),
   ).toBeEnabled();
@@ -199,16 +199,16 @@ test('время и слова трёх режимов сохраняются; �
     page.getByText('Книга закончилась', { exact: true }),
   ).toBeVisible({ timeout: 10000 });
   await page
-    .getByRole('button', { name: 'Обычное чтение', exact: true })
+    .getByRole('button', { name: 'Вернуться к тексту', exact: true })
     .click();
   await speedButton.click();
-  await page.getByRole('button', { name: 'Guided Reading — в тексте' }).click();
+  await page.getByRole('button', { name: 'С подсветкой текста' }).click();
   await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
   await expect(
     page.getByText('Книга закончилась', { exact: true }),
   ).toBeVisible({ timeout: 10000 });
   await page
-    .getByRole('button', { name: 'Обычное чтение', exact: true })
+    .getByRole('button', { name: 'Вернуться к тексту', exact: true })
     .click();
   await page
     .getByRole('button', { name: 'Закрыть книгу', exact: true })

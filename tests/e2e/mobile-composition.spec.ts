@@ -318,6 +318,15 @@ for (const width of [320, 390]) {
     await expect(
       page.getByRole('region', { name: 'Годовая сводка' }),
     ).toBeVisible();
+    const activity = page.getByRole('region', { name: 'Активность за год' });
+    await expect(activity.getByRole('status')).toHaveText('10 мин');
+    await activity
+      .getByLabel('Месяц', { exact: true })
+      .selectOption(String((new Date().getMonth() + 1) % 12));
+    await expect(activity.getByRole('status')).toHaveText('0 мин');
+    await activity
+      .getByLabel('Месяц', { exact: true })
+      .selectOption(String(new Date().getMonth()));
     await page.screenshot({
       path: test.info().outputPath('statistics-filled.png'),
       scale: 'css',

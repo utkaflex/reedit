@@ -21,7 +21,7 @@ export function DisclosureRow({
           <strong>{title}</strong>
           {detail && <small>{detail}</small>}
         </span>
-        <Icon name="arrow" />
+        <Icon name="expand" />
       </summary>
       <div className="disclosure-row__body">{children}</div>
     </details>

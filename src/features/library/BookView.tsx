@@ -69,7 +69,7 @@ export function LibraryCard({
           onClick={onRead}
           aria-label={`Читать «${book.title}»`}
         >
-          Читать →
+          Читать
         </Button>
       )}
     </li>
@@ -111,6 +111,7 @@ export function BookView({
     .filter((reading) => reading.bookId === book.id)
     .sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id));
   const attached = files.filter((file) => file.bookId === book.id);
+  const readable = attached.find((file) => file.sha256);
   const [selectedReading, setSelectedReading] = useState<Id | null>(null);
   const currentReading =
     history.find((reading) => reading.id === selectedReading) ?? history[0];
@@ -158,17 +159,38 @@ export function BookView({
             · доступна онлайн
           </p>
         )}
-        {attached[0]?.sha256 && (
+        {readable && (
           <Button
-            aria-label={`Читать файл ${attached[0].name}`}
+            aria-label={`Читать файл ${readable.name}`}
             disabled={busy}
             onClick={() => {
-              const file = attached[0];
-              if (file) onRead(file.id, currentReading?.id);
+              onRead(readable.id, currentReading?.id);
             }}
           >
             Читать
           </Button>
+        )}
+        {!readable && (
+          <div className="book-attach-actions">
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={() => {
+                onImport('epub');
+              }}
+            >
+              Прикрепить EPUB
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={() => {
+                onImport('fb2');
+              }}
+            >
+              Прикрепить FB2
+            </Button>
+          </div>
         )}
         <a
           className="button button--secondary"
@@ -176,46 +198,6 @@ export function BookView({
         >
           Цитаты и заметки
         </a>
-        <details className="book-disclosure">
-          <summary>О книге</summary>
-          <div className="form-stack">
-            {book.description && (
-              <p className="preserve-text">{book.description}</p>
-            )}
-            {book.genres.length > 0 && (
-              <p className="caption">Жанры: {book.genres.join(', ')}</p>
-            )}
-            {book.isbn.length > 0 && (
-              <p className="caption">ISBN: {book.isbn.join(', ')}</p>
-            )}
-            {book.language && <p className="caption">Язык: {book.language}</p>}
-            {(book.publisher || book.publishedDate) && (
-              <p className="caption">
-                {book.publisher} · {book.publishedDate}
-              </p>
-            )}
-            {book.catalogIds.map((ref) => (
-              <p className="caption" key={`${ref.source}:${ref.value}`}>
-                <a
-                  href={
-                    ref.source === 'google-books'
-                      ? `https://books.google.com/books?id=${encodeURIComponent(ref.value)}`
-                      : `https://openlibrary.org/books/${encodeURIComponent(ref.value)}`
-                  }
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {ref.source === 'google-books'
-                    ? 'Google Books'
-                    : 'Open Library'}{' '}
-                </a>
-              </p>
-            ))}
-          </div>
-        </details>
-        <Button variant="quiet" disabled={busy} onClick={onEdit}>
-          Редактировать книгу
-        </Button>
         <section className="form-stack" aria-label="История чтения">
           <div className="section-heading">
             <h3>История чтения</h3>
@@ -268,6 +250,46 @@ export function BookView({
             Добавить прочтение
           </Button>
         </section>
+        <details className="book-disclosure">
+          <summary>О книге</summary>
+          <div className="form-stack">
+            {book.description && (
+              <p className="preserve-text">{book.description}</p>
+            )}
+            {book.genres.length > 0 && (
+              <p className="caption">Жанры: {book.genres.join(', ')}</p>
+            )}
+            {book.isbn.length > 0 && (
+              <p className="caption">ISBN: {book.isbn.join(', ')}</p>
+            )}
+            {book.language && <p className="caption">Язык: {book.language}</p>}
+            {(book.publisher || book.publishedDate) && (
+              <p className="caption">
+                {book.publisher} · {book.publishedDate}
+              </p>
+            )}
+            {book.catalogIds.map((ref) => (
+              <p className="caption" key={`${ref.source}:${ref.value}`}>
+                <a
+                  href={
+                    ref.source === 'google-books'
+                      ? `https://books.google.com/books?id=${encodeURIComponent(ref.value)}`
+                      : `https://openlibrary.org/books/${encodeURIComponent(ref.value)}`
+                  }
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {ref.source === 'google-books'
+                    ? 'Google Books'
+                    : 'Open Library'}{' '}
+                </a>
+              </p>
+            ))}
+          </div>
+        </details>
+        <Button variant="quiet" disabled={busy} onClick={onEdit}>
+          Редактировать книгу
+        </Button>
         <details
           className="book-disclosure"
           open={attached.length === 0 ? true : undefined}
@@ -295,34 +317,38 @@ export function BookView({
                 ))}
               </SelectField>
             )}
-            <Button
-              variant="secondary"
-              disabled={busy}
-              onClick={() => {
-                onImport('epub');
-              }}
-            >
-              Прикрепить EPUB
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={busy}
-              onClick={() => {
-                onImport('fb2');
-              }}
-            >
-              Прикрепить FB2
-            </Button>
+            {readable && (
+              <>
+                <Button
+                  variant="secondary"
+                  disabled={busy}
+                  onClick={() => {
+                    onImport('epub');
+                  }}
+                >
+                  Прикрепить EPUB
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={busy}
+                  onClick={() => {
+                    onImport('fb2');
+                  }}
+                >
+                  Прикрепить FB2
+                </Button>
+              </>
+            )}
             {attached.length === 0 ? (
               <p className="caption">
                 Файл книги не прикреплён. Книга полноценно хранится в библиотеке
                 без файла. Можно прикрепить EPUB или FB2 к этой записи.
               </p>
             ) : (
-              attached.map((file, number) => (
+              attached.map((file) => (
                 <div className="file-row" key={file.id}>
                   <span>{file.name}</span>
-                  {file.sha256 && number > 0 ? (
+                  {file.sha256 && file.id !== readable?.id ? (
                     <Button
                       aria-label={`Читать файл ${file.name}`}
                       disabled={busy}

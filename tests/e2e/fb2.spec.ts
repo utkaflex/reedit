@@ -168,14 +168,25 @@ test('повторный FB2 и опасный XML не создают лишн�
   await page.goto('/');
   await importFb2(page);
   await page
-    .getByRole('button', { name: 'Создать книгу и сохранить FB2' })
+    .getByRole('button', { name: 'Добавить и читать', exact: true })
     .click();
-  await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Оформление чтения' }),
+  ).toBeEnabled();
+  await page
+    .getByRole('button', { name: 'Закрыть книгу', exact: true })
+    .click();
   await importFb2(page);
   await expect(
     page.getByRole('heading', { name: 'Этот файл уже в библиотеке' }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Закрыть импорт' }).click();
+  await page.getByRole('button', { name: 'Читать сохранённую книгу' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Оформление чтения' }),
+  ).toBeEnabled();
+  await page
+    .getByRole('button', { name: 'Закрыть книгу', exact: true })
+    .click();
   const unsafe = makeFb2Fixture().source.replace(
     '<FictionBook',
     '<!DOCTYPE FictionBook SYSTEM "https://example.org/external.dtd"><FictionBook',
