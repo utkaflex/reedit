@@ -1428,7 +1428,10 @@ class EpubReaderSession implements ReaderSession {
         }
       }
     }
-    if (!this.speedStop) await this.goTo(target);
+    if (this.speedStop) return;
+    if (this.options.onInternalLink && this.lastConfirmed)
+      this.options.onInternalLink(target, this.lastConfirmed);
+    else await this.goTo(target);
   }
   private listenToContent(contents: Contents): () => void {
     const doc = contents.document;

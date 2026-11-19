@@ -11,6 +11,7 @@ import {
   type ReaderLocation,
   type ReaderPreferences,
   type ReaderSession,
+  type ReaderTarget,
 } from '../../domain/reader';
 import {
   createPositionWriter,
@@ -71,6 +72,41 @@ export function ReaderScreen({
     selectedFragment.current = null;
     setSelection(null);
   }, []);
+  const command = useCallback(
+    (action: (reader: ReaderSession) => Promise<boolean>) => {
+      const reader = session.current;
+      if (!reader) return;
+      clearSelection();
+      void action(reader).catch((error: unknown) => {
+        setNotice(
+          error instanceof Error
+            ? error.message
+            : 'Не удалось перейти к странице.',
+        );
+      });
+    },
+    [clearSelection],
+  );
+  const previewTarget = useCallback(
+    (target: ReaderTarget, origin: ReaderLocation | null) => {
+      command(async (reader) => {
+        const firstPreview = !chapterOrigin.current && origin !== null;
+        if (firstPreview) chapterOrigin.current = origin;
+        let moved = false;
+        try {
+          moved = await reader.goTo(target);
+          if (moved && chapterOrigin.current) {
+            setChapterPreview(true);
+            setControls(true);
+          }
+          return moved;
+        } finally {
+          if (!moved && firstPreview) chapterOrigin.current = null;
+        }
+      });
+    },
+    [command],
+  );
   const [notesPanel, setNotesPanel] = useState<'saved' | 'bookmark' | null>(
     null,
   );
@@ -256,6 +292,9 @@ export function ReaderScreen({
           onFootnote: (note) => {
             if (!abort.signal.aborted) setFootnote(note);
           },
+          onInternalLink: (target, origin) => {
+            if (!abort.signal.aborted) previewTarget(target, origin);
+          },
           onToggleControls: () => {
             if (!abort.signal.aborted) {
               setGestureHint(false);
@@ -360,18 +399,14 @@ export function ReaderScreen({
     observeActivity,
     activityInteraction,
     clearSelection,
+    previewTarget,
   ]);
-  const command = (action: (reader: ReaderSession) => Promise<boolean>) => {
-    const reader = session.current;
-    if (!reader) return;
-    clearSelection();
-    void action(reader).catch((error: unknown) => {
-      setNotice(
-        error instanceof Error
-          ? error.message
-          : 'Не удалось перейти к странице.',
-      );
-    });
+  const keepPlace = () => {
+    if (!location) return;
+    chapterOrigin.current = null;
+    setChapterPreview(false);
+    writer.current?.push(location);
+    setPanel(null);
   };
   const close = async () => {
     try {
@@ -650,6 +685,11 @@ export function ReaderScreen({
                     К месту чтения
                   </Button>
                 )}
+                {chapterPreview && panel !== 'contents' && (
+                  <Button variant="quiet" disabled={busy} onClick={keepPlace}>
+                    Читать отсюда
+                  </Button>
+                )}
                 {!chapterPreview && activity.canConfirm && !busy && (
                   <Button
                     variant="quiet"
@@ -815,33 +855,13 @@ export function ReaderScreen({
           index={index}
           currentPath={location?.path}
           currentChapter={location?.chapter}
-          {...(chapterPreview
-            ? {
-                onKeepPlace: () => {
-                  chapterOrigin.current = null;
-                  setChapterPreview(false);
-                  if (location) writer.current?.push(location);
-                  setPanel(null);
-                },
-              }
-            : {})}
+          {...(chapterPreview ? { onKeepPlace: keepPlace } : {})}
           onClose={() => {
             setPanel(null);
           }}
           onNavigate={(target) => {
             setPanel(null);
-            command(async (reader) => {
-              const firstPreview = !chapterOrigin.current && location !== null;
-              if (firstPreview) chapterOrigin.current = location;
-              let moved = false;
-              try {
-                moved = await reader.goTo(target);
-                if (moved && chapterOrigin.current) setChapterPreview(true);
-                return moved;
-              } finally {
-                if (!moved && firstPreview) chapterOrigin.current = null;
-              }
-            });
+            previewTarget(target, location);
           }}
         />
       )}

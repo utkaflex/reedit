@@ -103,6 +103,7 @@ export interface ReaderOpenOptions {
   onLocation: (location: ReaderLocation) => void;
   fb2NoteReferences?: ReadonlySet<string>;
   onFootnote?: (note: string) => void;
+  onInternalLink?: (target: ReaderTarget, origin: ReaderLocation) => void;
   onToggleControls: () => void;
   onBusy: (busy: boolean) => void;
   onError: (message: string) => void;

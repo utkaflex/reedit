@@ -72,6 +72,41 @@ async function position(page: Page) {
       }),
   );
 }
+test('внутренняя ссылка не меняет место для «Продолжить»', async ({ page }) => {
+  await openBook(page, {
+    chapters: [
+      {
+        name: 'first.xhtml',
+        text: '',
+        markup: `<p>Исходный абзац <a href="appendix.xhtml#remark">[1]</a>.</p><p>${'Основной текст книги ещё продолжается. '.repeat(60)}</p>`,
+      },
+      {
+        name: 'appendix.xhtml',
+        text: '',
+        markup: '<p id="remark">Примечание в конце книги.</p>',
+      },
+    ],
+    toc: [0, 1],
+  });
+  const frame = page.frameLocator('iframe');
+  const link = frame.getByRole('link', { name: '[1]', exact: true });
+  await expect(link).toBeVisible();
+  await link.click();
+  await expect(frame.getByText('Примечание в конце книги.')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'К месту чтения' }),
+  ).toBeEnabled();
+  await expect(
+    page.getByRole('button', { name: 'Читать отсюда' }),
+  ).toBeEnabled();
+  await page.getByRole('button', { name: 'Закрыть книгу' }).click();
+  await page
+    .getByRole('button', { name: 'Продолжить чтение', exact: true })
+    .click();
+  await expect(link).toBeInViewport();
+  await expect(frame.getByText(/Исходный абзац/u)).toBeInViewport();
+});
+
 test('точное слово: CFI, выделение, оформление, сохранение и передача общего курсора', async ({
   page,
 }) => {
