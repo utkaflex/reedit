@@ -213,3 +213,66 @@
   min-height: 44px;
   font-size: 12px;
 }
+.speed-controls {
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+}
+.speed-inline {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px 44px 44px;
+  align-items: center;
+  gap: 2px;
+}
+.speed-inline > .button {
+  padding: 4px;
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 12px;
+}
+.speed-more {
+  position: relative;
+}
+.speed-more > summary {
+  padding: 8px;
+  min-width: 44px;
+  list-style: none;
+}
+.speed-more > summary::-webkit-details-marker {
+  display: none;
+}
+.speed-more-menu {
+  position: absolute;
+  bottom: 52px;
+  right: 0;
+  width: min(270px, 80vw);
+  padding: 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 6px 25px #0002;
+  z-index: 10;
+}
+.speed-more-menu .button {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+}
+.speed-stepper {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  gap: 8px;
+  align-items: end;
+}
+.speed-stepper .button {
+  padding: 8px;
+}
+.speed-stepper input {
+  text-align: center;
+}
+.speed-step-label {
+  font-weight: 600;
+}
+.speed-controls section > .form-stack {
+  margin-top: 12px;
+}

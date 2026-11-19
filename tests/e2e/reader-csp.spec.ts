@@ -67,8 +67,83 @@ for (const scenario of [
       letterSpacing: '0.375px',
       userSelect: 'text',
     });
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ stage: 'display', outcome: 'success' }),
+        expect.objectContaining({ stage: 'relocation', outcome: 'success' }),
+        expect.objectContaining({ stage: 'ready', outcome: 'success' }),
+      ]),
+    );
   });
 }
+
+test('контроль запрета blob iframe: журнал различает стадии движка', async ({
+  page,
+  browserName,
+}) => {
+  test.setTimeout(45000);
+  const fixture = await makeEpubFixture({ version: '3' });
+  await page.route('**/__reader-blocked', (route) =>
+    route.fulfill({
+      body: '<!doctype html><html><body></body></html>',
+      contentType: 'text/html',
+      headers: {
+        ...securityHeaders,
+        'Content-Security-Policy':
+          "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-src 'none'",
+      },
+    }),
+  );
+  await page.goto('/__reader-blocked');
+  await page.evaluate(
+    async (bytes) => {
+      const path = '/tests/fixtures/reader-probe.ts';
+      const loaded = (await import(
+        path
+      )) as typeof import('../fixtures/reader-probe');
+      // Intentionally do not await the blocked engine promise.
+      void loaded.probeReader(bytes);
+    },
+    [...fixture.bytes],
+  );
+  const read = () =>
+    page.evaluate(async () => {
+      const path = '/src/services/reader-diagnostics.ts';
+      const loaded = (await import(
+        path
+      )) as typeof import('../../src/services/reader-diagnostics');
+      return loaded.readReaderDiagnostics();
+    });
+  await expect.poll(read).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        stage: 'renderer-started',
+        outcome: 'success',
+      }),
+      expect.objectContaining({ stage: 'display', outcome: 'started' }),
+    ]),
+  );
+  // Allow normal relocation several frames; a blocked iframe never reports it.
+  await page.waitForTimeout(1000);
+  const diagnostics = await read();
+  const displayed = diagnostics.some(
+    (event) => event.stage === 'display' && event.outcome === 'success',
+  );
+  if (browserName === 'chromium') {
+    expect(displayed).toBe(false);
+    expect(diagnostics.some((event) => event.stage === 'relocation')).toBe(
+      false,
+    );
+  } else {
+    // Windows WebKit resolves display under this same negative control.
+    // Do not misreport the Chromium hang as a cross-engine root cause.
+    expect(displayed).toBe(true);
+  }
+  await test.info().attach('blocked-reader-stages', {
+    body: JSON.stringify(diagnostics, null, 2),
+    contentType: 'application/json',
+  });
+});
 test('нативное выделение передаётся из XHTML без selectionchange', async ({
   page,
 }) => {

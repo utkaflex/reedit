@@ -297,6 +297,23 @@ export class SpeedReadingService {
       );
     });
   }
+  async adjustSpeed(delta: number): Promise<void> {
+    return this.change(async () => {
+      const playing = this.snapshot.playing;
+      const preferences = {
+        ...this.snapshot.preferences,
+        wpm: Math.max(
+          100,
+          Math.min(900, this.snapshot.preferences.wpm + delta),
+        ),
+      };
+      this.scheduler?.pause();
+      this.snapshot.preferences = preferences;
+      this.emit();
+      await saveSpeedPreferences(this.store, preferences);
+      if (playing && !this.isHidden()) this.scheduler?.play();
+    });
+  }
   async configure(preferences: SpeedPreferences): Promise<void> {
     return this.change(async () => {
       if (

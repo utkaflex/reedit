@@ -44,6 +44,8 @@ import { ReadingProgressService } from '../../services/reading-progress';
 import { PositionPersistenceService } from '../../services/position-persistence';
 import { operationDeadline } from '../../services/operation-deadline';
 
+import { ReaderDiagnostics } from '../../services/reader-diagnostics';
+
 const palette = {
   light: { background: '#fffefa', text: '#252a27' },
   dark: { background: '#191b19', text: '#eeeee6' },
@@ -64,6 +66,7 @@ function isDocument(value: unknown): value is Document {
 }
 
 class EpubReaderSession implements ReaderSession {
+  private readonly diagnostics = new ReaderDiagnostics();
   private speedStop: (() => void) | null = null;
   private returnCursor: ReadingCursor | null = null;
   private speedSource: { spineIndex: number; doc: Document } | null = null;
@@ -140,15 +143,17 @@ class EpubReaderSession implements ReaderSession {
       const representation = this.options.file.representation;
       const data = representation?.data ?? this.options.file.data;
       this.options.onProgress?.('Проверяем файл книги…');
-      const checked = await this.analyze(
-        {
-          name: representation ? 'converted.epub' : this.options.file.name,
-          size: data.size,
-          type: 'application/epub+zip',
-          arrayBuffer: () => data.arrayBuffer(),
-        },
-        this.options.signal,
-        (message) => this.options.onProgress?.(message),
+      const checked = await this.diagnostics.measure('validate-file', () =>
+        this.analyze(
+          {
+            name: representation ? 'converted.epub' : this.options.file.name,
+            size: data.size,
+            type: 'application/epub+zip',
+            arrayBuffer: () => data.arrayBuffer(),
+          },
+          this.options.signal,
+          (message) => this.options.onProgress?.(message),
+        ),
       );
       if (
         checked.sha256 !==
@@ -165,11 +170,14 @@ class EpubReaderSession implements ReaderSession {
         throw new Error(
           'Оригинал EPUB не соответствует сохранённому индексу. Повторно импортируйте файл.',
         );
-      this.buffer = await checked.original.arrayBuffer();
+      this.buffer = await this.diagnostics.measure('read-blob', () =>
+        checked.original.arrayBuffer(),
+      );
       this.ensureAlive();
       this.options.onProgress?.('Открываем содержимое EPUB…');
       await this.createBook();
       if (!this.textIndex) throw new Error('Текстовый индекс не готов.');
+      this.diagnostics.mark('restore-anchor', 'started');
       let restored = PositionPersistenceService.restore(
         this.textIndex,
         this.options.cfi
@@ -187,6 +195,7 @@ class EpubReaderSession implements ReaderSession {
       const initialCfi = restored.cursor
         ? await this.cfiForCursor(restored.cursor)
         : restored.cfi;
+      this.diagnostics.mark('restore-anchor', 'success');
       this.options.onProgress?.('Восстанавливаем место и готовим страницу…');
       await this.settle(
         () => this.display(initialCfi ?? undefined),
@@ -194,9 +203,14 @@ class EpubReaderSession implements ReaderSession {
         restored.cursor,
       );
       this.ready = true;
+      this.diagnostics.mark('ready', 'success');
       this.observeResize();
       return this;
     } catch (error) {
+      this.diagnostics.mark(
+        'ready',
+        this.options.signal.aborted ? 'cancelled' : 'failure',
+      );
       this.destroy();
       throw error;
     } finally {
@@ -214,46 +228,62 @@ class EpubReaderSession implements ReaderSession {
     return this.rendition;
   }
   private async display(target?: string): Promise<void> {
-    await this.requireRendition().display(target);
+    await this.diagnostics.measure('display', () =>
+      this.requireRendition().display(target),
+    );
     this.ensureAlive();
     if (!target || !this.content) return;
     const doc = this.content.document;
     // A freshly scrolled view can clamp its first target before its height expands.
     // Wait for local resource layout, then use the public display API on the same target.
-    await new Promise<void>((resolve, reject) => {
-      const cleanup = () => {
-        clearTimeout(timer);
-        this.options.signal.removeEventListener('abort', cancelled);
-      };
-      const cancelled = () => {
-        cleanup();
-        reject(new Error('Читалка закрыта'));
-      };
-      const timer = setTimeout(() => {
-        cleanup();
-        reject(
-          new Error('Не удалось дождаться раскладки EPUB. Повторите переход.'),
-        );
-      }, 5000);
-      this.options.signal.addEventListener('abort', cancelled, { once: true });
-      void Promise.all([
-        doc.fonts.ready,
-        ...Array.from(doc.getElementsByTagName('img'), (image) =>
-          image.decode().catch(() => undefined),
-        ),
-      ]).then(
-        () => {
-          cleanup();
-          resolve();
-        },
-        (error: unknown) => {
-          cleanup();
-          reject(
-            error instanceof Error ? error : new Error('Ошибка раскладки EPUB'),
+    await this.diagnostics.measure(
+      'layout',
+      () =>
+        new Promise<void>((resolve, reject) => {
+          const cleanup = () => {
+            clearTimeout(timer);
+            this.options.signal.removeEventListener('abort', cancelled);
+          };
+          const cancelled = () => {
+            cleanup();
+            reject(new Error('Читалка закрыта'));
+          };
+          const timer = setTimeout(() => {
+            cleanup();
+            reject(
+              new Error(
+                'Не удалось дождаться раскладки EPUB. Повторите переход.',
+              ),
+            );
+          }, 5000);
+          this.options.signal.addEventListener('abort', cancelled, {
+            once: true,
+          });
+          void Promise.all([
+            this.diagnostics.measure('fonts-ready', () => doc.fonts.ready),
+            this.diagnostics.measure('images-ready', () =>
+              Promise.all(
+                Array.from(doc.getElementsByTagName('img'), (image) =>
+                  image.decode().catch(() => undefined),
+                ),
+              ),
+            ),
+          ]).then(
+            () => {
+              cleanup();
+              resolve();
+            },
+            (error: unknown) => {
+              cleanup();
+              reject(
+                error instanceof Error
+                  ? error
+                  : new Error('Ошибка раскладки EPUB'),
+              );
+            },
           );
-        },
-      );
-    });
+        }),
+    );
     for (let frame = 0; frame < 2; frame++) {
       await new Promise<void>((resolve) => {
         requestAnimationFrame(() => {
@@ -267,6 +297,7 @@ class EpubReaderSession implements ReaderSession {
   private async createBook(): Promise<void> {
     this.ensureAlive();
     if (!this.buffer) throw new Error('Оригинал EPUB недоступен');
+    const buffer = this.buffer;
     const book = new Book({
       replacements: 'blobUrl',
       requestMethod: () =>
@@ -275,19 +306,26 @@ class EpubReaderSession implements ReaderSession {
     this.book = book;
     this.openingBook = true;
     try {
-      await operationDeadline(
-        book.open(this.buffer, 'binary'),
-        this.options.signal,
-        15000,
-        'Не удалось открыть содержимое EPUB за 15 секунд. Попробуйте другое издание или повторите открытие. Книга сохранена.',
+      await this.diagnostics.measure('open-package', () =>
+        operationDeadline(
+          book.open(buffer, 'binary'),
+          this.options.signal,
+          15000,
+          'Не удалось открыть содержимое EPUB за 15 секунд. Попробуйте другое издание или повторите открытие. Книга сохранена.',
+        ),
       );
-      await operationDeadline(
-        book.ready,
-        this.options.signal,
-        15000,
-        'Не удалось загрузить структуру книги. Файл сохранён; попробуйте повторить открытие.',
+      await this.diagnostics.measure('package-ready', () =>
+        operationDeadline(
+          book.ready,
+          this.options.signal,
+          15000,
+          'Не удалось загрузить структуру книги. Файл сохранён; попробуйте повторить открытие.',
+        ),
       );
-      await book.loaded.resources;
+      await this.diagnostics.measure(
+        'resources-ready',
+        () => book.loaded.resources,
+      );
     } finally {
       this.openingBook = false;
     }
@@ -318,6 +356,7 @@ class EpubReaderSession implements ReaderSession {
       meta.setAttribute('content', csp);
       head.insertBefore(meta, head.firstChild);
     });
+    this.diagnostics.mark('prepare-document', 'started');
     if (!this.textIndex) {
       const cached = this.options.documentIndex;
       if (
@@ -363,6 +402,7 @@ class EpubReaderSession implements ReaderSession {
       }
       this.resolver = new PositionResolver(this.textIndex);
     }
+    this.diagnostics.mark('prepare-document', 'success');
     this.ensureAlive();
     const { width, height } = this.measure();
     this.size = { width, height };
@@ -384,12 +424,13 @@ class EpubReaderSession implements ReaderSession {
     rendition.on('relocated', this.relocated);
     rendition.hooks.content.register((contents: Contents) => {
       if (this.disposed) return;
+      this.diagnostics.mark('iframe-content', 'success');
       this.contentCleanup?.();
       this.content = contents;
       this.styleContent(contents);
       this.contentCleanup = this.listenToContent(contents);
     });
-    await rendition.started;
+    await this.diagnostics.measure('renderer-started', () => rendition.started);
     this.ensureAlive();
   }
   private measure() {
@@ -552,45 +593,49 @@ class EpubReaderSession implements ReaderSession {
       await action();
       this.ensureAlive();
       const rendition = this.requireRendition();
-      await new Promise<void>((resolve, reject) => {
-        const cleanup = () => {
-          clearTimeout(timer);
-          rendition.off('relocated', confirmed);
-          this.options.signal.removeEventListener('abort', cancelled);
-          this.waitCleanup = null;
-        };
-        const confirmed = (location: Location) => {
-          if (!location.start.cfi) return;
-          this.latest = location;
-          cleanup();
-          resolve();
-        };
-        const cancelled = () => {
-          cleanup();
-          reject(new Error('Читалка закрыта'));
-        };
-        const timer = setTimeout(() => {
-          cleanup();
-          reject(
-            new Error(
-              'Движок не подтвердил позицию. Закройте и откройте книгу повторно.',
-            ),
-          );
-        }, 10000);
-        this.waitCleanup = cancelled;
-        this.options.signal.addEventListener('abort', cancelled, {
-          once: true,
-        });
-        rendition.on('relocated', confirmed);
-        void rendition.reportLocation().catch((error: unknown) => {
-          cleanup();
-          reject(
-            error instanceof Error
-              ? error
-              : new Error('Не удалось определить позицию'),
-          );
-        });
-      });
+      await this.diagnostics.measure(
+        'relocation',
+        () =>
+          new Promise<void>((resolve, reject) => {
+            const cleanup = () => {
+              clearTimeout(timer);
+              rendition.off('relocated', confirmed);
+              this.options.signal.removeEventListener('abort', cancelled);
+              this.waitCleanup = null;
+            };
+            const confirmed = (location: Location) => {
+              if (!location.start.cfi) return;
+              this.latest = location;
+              cleanup();
+              resolve();
+            };
+            const cancelled = () => {
+              cleanup();
+              reject(new Error('Читалка закрыта'));
+            };
+            const timer = setTimeout(() => {
+              cleanup();
+              reject(
+                new Error(
+                  'Движок не подтвердил позицию. Закройте и откройте книгу повторно.',
+                ),
+              );
+            }, 10000);
+            this.waitCleanup = cancelled;
+            this.options.signal.addEventListener('abort', cancelled, {
+              once: true,
+            });
+            rendition.on('relocated', confirmed);
+            void rendition.reportLocation().catch((error: unknown) => {
+              cleanup();
+              reject(
+                error instanceof Error
+                  ? error
+                  : new Error('Не удалось определить позицию'),
+              );
+            });
+          }),
+      );
       this.ensureAlive();
       if (this.latest) this.publish(this.latest, anchor, cursor);
     } finally {
@@ -741,26 +786,42 @@ class EpubReaderSession implements ReaderSession {
       }));
   }
   private drawSpeedRange(): void {
-    this.speedOverlay?.remove();
-    this.speedOverlay = null;
     if (!this.speedRange || this.disposed) return;
-    const overlay = document.createElement('div');
+    const overlay = this.speedOverlay ?? document.createElement('div');
     overlay.className = 'speed-highlight-layer';
     overlay.setAttribute('aria-hidden', 'true');
-    for (const rect of this.speedRects(
-      this.speedRange.start,
-      this.speedRange.end,
-    )) {
-      const mark = document.createElement('span');
+    const rects = this.speedRects(this.speedRange.start, this.speedRange.end);
+    const old = Array.from(overlay.children);
+    rects.forEach((rect, index) => {
+      const previous = old[index];
+      const mark =
+        previous instanceof HTMLSpanElement
+          ? previous
+          : document.createElement('span');
+      const top = parseFloat(mark.style.top);
+      const sameLine =
+        Number.isFinite(top) && Math.abs(top - rect.top) < rect.height / 2;
       mark.className = 'speed-word-highlight';
+      mark.style.transition =
+        sameLine && this.preferences.animations && !this.motion.matches
+          ? 'left 65ms linear, width 65ms linear'
+          : 'none';
       Object.assign(mark.style, {
-        left: `${String(rect.left)}px`,
-        top: `${String(rect.top)}px`,
-        width: `${String(rect.width)}px`,
-        height: `${String(rect.height)}px`,
+        left: String(rect.left) + 'px',
+        top: String(rect.top) + 'px',
+        width: String(rect.width) + 'px',
+        height: String(rect.height) + 'px',
+        border: '0',
+        borderRadius: '6px',
+        background: 'rgba(180,140,85,.24)',
       });
+      if (!sameLine && this.preferences.animations && !this.motion.matches)
+        mark.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 55 });
       overlay.append(mark);
-    }
+    });
+    old.slice(rects.length).forEach((mark) => {
+      mark.remove();
+    });
     this.options.host.append(overlay);
     this.speedOverlay = overlay;
   }

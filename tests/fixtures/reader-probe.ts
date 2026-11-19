@@ -1,3 +1,4 @@
+import { readReaderDiagnostics } from '../../src/services/reader-diagnostics';
 import { EpubJsAdapter } from '../../src/infrastructure/epub/EpubJsAdapter';
 import { newId, type EpubIndex } from '../../src/domain/model';
 import {
@@ -119,6 +120,7 @@ export async function probeReader(
     return {
       ready: true,
       stages,
+      diagnostics: readReaderDiagnostics(),
       error: '',
       letterSpacing,
       selectedQuote,
@@ -128,6 +130,7 @@ export async function probeReader(
     return {
       ready: false,
       stages,
+      diagnostics: readReaderDiagnostics(),
       error: error instanceof Error ? error.message : String(error),
     };
   } finally {

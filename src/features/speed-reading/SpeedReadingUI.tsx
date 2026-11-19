@@ -99,51 +99,39 @@ export function SpeedControls({
         }
       }}
     >
-      <div className="speed-status">
-        <span role="status">
-          {snapshot.preparing
-            ? 'Готовим текст…'
-            : snapshot.ended
-              ? 'Книга закончилась'
-              : snapshot.playing
-                ? 'Воспроизведение'
-                : 'Пауза'}
-        </span>
-        <span aria-live="off" data-testid="speed-ordinal">
-          {snapshot.ordinal} / {snapshot.total}
-        </span>
-      </div>
-      <progress
-        className="speed-progress"
-        aria-label="Прогресс скорочтения"
-        max={Math.max(1, snapshot.total)}
-        value={snapshot.ordinal}
-      />
-      {snapshot.mode === 'guided' && (
-        <p className="caption">С подсветкой текста · касание ставит на паузу</p>
-      )}
-      <div className="speed-buttons speed-transport">
+      <div className="speed-inline">
         <Button
           variant="quiet"
-          aria-label="Назад по словам"
-          disabled={
-            snapshot.preparing || snapshot.busy || snapshot.ordinal <= 1
-          }
+          aria-label="Уменьшить скорость"
+          disabled={p.wpm <= 100}
           onClick={() => {
-            run((session) => session.seek('back'));
+            run((session) => session.adjustSpeed(-10));
           }}
         >
-          <Icon name="previous" />
+          −
         </Button>
         <Button
-          className="speed-play"
+          variant="quiet"
+          onClick={() => {
+            service?.pause();
+            setSettings(structuredClone(snapshot.preferences));
+          }}
+        >
+          {p.wpm} слов/мин
+        </Button>
+        <Button
+          variant="quiet"
+          aria-label="Увеличить скорость"
+          disabled={p.wpm >= 900}
+          onClick={() => {
+            run((session) => session.adjustSpeed(10));
+          }}
+        >
+          +
+        </Button>
+        <Button
           aria-label={snapshot.playing ? 'Пауза' : 'Продолжить'}
-          disabled={
-            snapshot.preparing ||
-            snapshot.ordinal === 0 ||
-            (!snapshot.playing && snapshot.busy) ||
-            snapshot.ended
-          }
+          disabled={snapshot.preparing || snapshot.ended}
           onClick={() => {
             if (snapshot.playing) service?.pause();
             else run((session) => session.play());
@@ -151,53 +139,57 @@ export function SpeedControls({
         >
           <Icon name={snapshot.playing ? 'pause' : 'play'} />
         </Button>
-        <Button
-          variant="quiet"
-          aria-label="Вперёд по словам"
-          disabled={
-            snapshot.preparing ||
-            snapshot.busy ||
-            snapshot.ordinal >= snapshot.total
-          }
-          onClick={() => {
-            run((session) => session.seek('forward'));
-          }}
-        >
-          <Icon name="next" />
-        </Button>
-        <Button
-          variant="quiet"
-          className="speed-repeat"
-          aria-label="Предыдущее предложение"
-          disabled={
-            snapshot.preparing || snapshot.busy || snapshot.ordinal === 0
-          }
-          onClick={() => {
-            run((session) => session.seek('sentence'));
-          }}
-        >
-          <Icon name="repeat" />
-        </Button>
-      </div>
-      <div className="speed-buttons">
-        <Button
-          variant="quiet"
-          onClick={() => {
-            service?.pause();
-            setSettings(structuredClone(snapshot.preferences));
-          }}
-          disabled={snapshot.preparing}
-        >
-          <Icon name="settings" /> {p.wpm} WPM · Настройки
-        </Button>
-        <Button
-          variant="secondary"
-          onClick={() => {
-            run((session) => session.stop());
-          }}
-        >
-          <Icon name="book" /> Вернуться к тексту
-        </Button>
+        <details className="speed-more">
+          <summary
+            className="button button--quiet"
+            aria-label="Действия скорочтения"
+          >
+            <Icon name="more" />
+          </summary>
+          <div className="speed-more-menu">
+            <Button
+              variant="quiet"
+              onClick={() => {
+                service?.pause();
+                setSettings(structuredClone(snapshot.preferences));
+              }}
+            >
+              Настройки
+            </Button>
+            <Button
+              variant="quiet"
+              onClick={() => {
+                run((session) => session.seek('back'));
+              }}
+            >
+              Назад по словам
+            </Button>
+            <Button
+              variant="quiet"
+              onClick={() => {
+                run((session) => session.seek('forward'));
+              }}
+            >
+              Вперёд по словам
+            </Button>
+            <Button
+              variant="quiet"
+              onClick={() => {
+                run((session) => session.seek('sentence'));
+              }}
+            >
+              Предыдущее предложение
+            </Button>
+            <Button
+              variant="quiet"
+              onClick={() => {
+                run((session) => session.stop());
+              }}
+            >
+              Вернуться к тексту
+            </Button>
+          </div>
+        </details>
       </div>
       {snapshot.error && (
         <p className="error-text" role="alert">
@@ -224,18 +216,41 @@ export function SpeedControls({
               });
             }}
           >
-            <TextField
-              label={`Скорость: ${String(p.wpm)} слов/мин`}
-              type="range"
-              min={100}
-              max={900}
-              step={10}
-              value={p.wpm}
-              disabled={snapshot.busy}
-              onChange={(event) => {
-                configure({ ...p, wpm: Number(event.target.value) });
-              }}
-            />
+            <label className="speed-step-label">
+              Скорость · 100–900 слов/мин
+            </label>
+            <div className="speed-stepper">
+              <Button
+                variant="secondary"
+                aria-label="Медленнее"
+                onClick={() => {
+                  configure({ ...p, wpm: Math.max(100, p.wpm - 10) });
+                }}
+              >
+                −
+              </Button>
+              <TextField
+                label="Слов в минуту"
+                type="number"
+                inputMode="numeric"
+                min={100}
+                max={900}
+                step={10}
+                value={p.wpm}
+                onChange={(event) => {
+                  configure({ ...p, wpm: Number(event.target.value) });
+                }}
+              />
+              <Button
+                variant="secondary"
+                aria-label="Быстрее"
+                onClick={() => {
+                  configure({ ...p, wpm: Math.min(900, p.wpm + 10) });
+                }}
+              >
+                +
+              </Button>
+            </div>
             {snapshot.mode === 'rsvp' ? (
               <label className="speed-checkbox">
                 <input
@@ -249,20 +264,50 @@ export function SpeedControls({
                 Выделять опорную букву
               </label>
             ) : (
-              <TextField
-                label="Слов в подсветке"
-                type="number"
-                min={1}
-                max={12}
-                value={p.guidedWords}
-                disabled={snapshot.busy}
-                onChange={(event) => {
-                  configure({ ...p, guidedWords: Number(event.target.value) });
-                }}
-              />
+              <div className="speed-stepper">
+                <Button
+                  variant="secondary"
+                  aria-label="Меньше слов"
+                  onClick={() => {
+                    configure({
+                      ...p,
+                      guidedWords: Math.max(1, p.guidedWords - 1),
+                    });
+                  }}
+                >
+                  −
+                </Button>
+                <TextField
+                  label="Слов в подсветке"
+                  type="number"
+                  min={1}
+                  max={12}
+                  readOnly
+                  value={p.guidedWords}
+                  disabled={snapshot.busy}
+                  onChange={(event) => {
+                    configure({
+                      ...p,
+                      guidedWords: Number(event.target.value),
+                    });
+                  }}
+                />
+                <Button
+                  variant="secondary"
+                  aria-label="Больше слов"
+                  onClick={() => {
+                    configure({
+                      ...p,
+                      guidedWords: Math.min(12, p.guidedWords + 1),
+                    });
+                  }}
+                >
+                  +
+                </Button>
+              </div>
             )}
-            <details>
-              <summary>Интеллектуальные паузы</summary>
+            <section>
+              <h3>Интеллектуальные паузы</h3>
               <div className="form-stack">
                 {Object.entries(pauseLabels).map(([key, label]) => (
                   <TextField
@@ -305,7 +350,7 @@ export function SpeedControls({
                   оставляет чтение на паузе.
                 </p>
               </div>
-            </details>
+            </section>
             {snapshot.error && <p role="alert">{snapshot.error}</p>}
             <Button
               type="submit"
