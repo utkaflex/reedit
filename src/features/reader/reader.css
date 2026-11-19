@@ -89,6 +89,8 @@
   min-width: 0;
 }
 .reader-host .epub-container {
+  /* epub.js compensates for chapters inserted or removed above the viewport. */
+  overflow-anchor: none;
   overscroll-behavior: contain;
   scrollbar-width: thin;
 }
@@ -123,10 +125,6 @@
 .reader-progress-row,
 .reader-footer-content > progress {
   grid-column: 1 / -1;
-}
-.reader-navigation {
-  grid-row: 3;
-  grid-column: 1;
 }
 .reader-confirm {
   grid-row: 3;
@@ -318,12 +316,6 @@
 .reader-bottom progress::-moz-progress-bar {
   background: var(--color-accent);
 }
-.reader-navigation {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
 .reader-save-state {
   color: var(--color-muted);
   font-size: 0.75rem;
@@ -454,16 +446,6 @@
   grid-template-columns: auto minmax(0, 1fr);
   column-gap: 8px;
 }
-.reader-navigation {
-  width: max-content;
-  gap: 0;
-  background: var(--color-subtle);
-  border-radius: var(--radius-md);
-}
-.reader-navigation .button {
-  min-width: 44px;
-  padding: 0;
-}
 .reader-confirm {
   justify-self: end;
   font-size: var(--text-xs);
@@ -499,9 +481,6 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 8px;
   position: relative;
-}
-.reader-footer-content .reader-navigation {
-  grid-area: 1 / 1;
 }
 .reader-footer-content .reader-progress-row {
   grid-area: 1 / 2;

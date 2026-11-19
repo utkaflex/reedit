@@ -329,10 +329,11 @@ test('оформление, поворот экрана, прокрутка и �
     .getByRole('button', { name: 'Раздел 2 · middle.xhtml', exact: true })
     .click();
   await expect(page.locator('.reader-chapter')).toContainText('Раздел 2');
-  await expect(page.frameLocator('iframe').locator('body')).toContainText(
-    'Середина без оглавления.',
-  );
-  await page.locator('.reader-screen').press('ArrowRight');
+  await expect(
+    page.locator('iframe').last().contentFrame().locator('body'),
+  ).toContainText('Середина без оглавления.');
+  await page.getByRole('button', { name: 'Оглавление' }).click();
+  await page.getByRole('button', { name: 'Раздел 3', exact: true }).click();
   await expect(page.locator('.reader-chapter')).toContainText('Раздел 3');
   await page.getByRole('button', { name: 'Оглавление' }).click();
   await page.getByRole('button', { name: 'Читать отсюда' }).click();

@@ -124,7 +124,9 @@ for (const width of [320, 390]) {
       await page.getByRole('button', { name: 'Оглавление' }).click();
       await page.getByRole('button', { name: 'Раздел 2', exact: true }).click();
       await expect(frame.locator('body')).toContainText('Другая глава');
-      await page.getByRole('button', { name: 'К месту', exact: true }).click();
+      await page
+        .getByRole('button', { name: 'К месту чтения', exact: true })
+        .click();
       await expect(frame.locator('body')).toContainText('Когда мы вышли');
       await expect(progress).toHaveAttribute('value', origin ?? '');
       await page.getByRole('button', { name: 'Оформление чтения' }).click();

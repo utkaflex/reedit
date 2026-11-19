@@ -647,7 +647,7 @@ export function ReaderScreen({
                       });
                     }}
                   >
-                    К месту
+                    К месту чтения
                   </Button>
                 )}
                 {!chapterPreview && activity.canConfirm && !busy && (

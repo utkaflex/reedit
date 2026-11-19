@@ -110,8 +110,11 @@ class EpubReaderSession implements ReaderSession {
   private drawnHighlights: string[] = [];
   private book: Book | null = null;
   private rendition: Rendition | null = null;
-  private content: Contents | null = null;
-  private contentCleanup: (() => void) | null = null;
+  private mounted = new Map<
+    Contents,
+    { frame: Element; cleanup: () => void }
+  >();
+  private frameObserver: MutationObserver | null = null;
   private disposed = false;
   private openingBook = false;
   private operations = 0;
@@ -130,7 +133,7 @@ class EpubReaderSession implements ReaderSession {
   private resizePending = false;
   private motion = window.matchMedia('(prefers-reduced-motion: reduce)');
   private motionChanged = () => {
-    if (this.content) this.styleContent(this.content);
+    for (const contents of this.mounted.keys()) this.styleContent(contents);
   };
   private viewportResize = () => {
     if (this.ready && !this.disposed) {
@@ -147,7 +150,12 @@ class EpubReaderSession implements ReaderSession {
     this.destroy();
   };
   private relocated = (location: Location) => {
-    if (this.disposed || !location.start.cfi) return;
+    if (
+      this.disposed ||
+      !location.start.cfi ||
+      !this.contentFor(location.start.index)
+    )
+      return;
     this.latest = location;
     if (this.ready && !this.muted) {
       try {
@@ -259,13 +267,38 @@ class EpubReaderSession implements ReaderSession {
     if (!this.rendition) throw new Error('Движок чтения не готов');
     return this.rendition;
   }
+  private contentFor(index: number): Contents | undefined {
+    for (const [contents, { frame }] of this.mounted) {
+      if (contents.sectionIndex === index && this.options.host.contains(frame))
+        return contents;
+    }
+  }
+  private pruneContents(): void {
+    let removed = false;
+    for (const [contents, { frame, cleanup }] of this.mounted) {
+      if (this.options.host.contains(frame)) continue;
+      cleanup();
+      this.mounted.delete(contents);
+      removed = true;
+    }
+    if (removed && !this.speedStop)
+      this.options.onSelection?.(this.getSelection());
+  }
+  private clearContents(): void {
+    this.frameObserver?.disconnect();
+    this.frameObserver = null;
+    for (const { cleanup } of this.mounted.values()) cleanup();
+    this.mounted.clear();
+  }
   private async display(target?: string): Promise<void> {
     await this.diagnostics.measure('display', () =>
       this.requireRendition().display(target),
     );
     this.ensureAlive();
-    if (!target || !this.content) return;
-    const doc = this.content.document;
+    if (!target) return;
+    const section = this.book?.spine.get(target);
+    const doc = section && this.contentFor(section.index)?.document;
+    if (!doc) return;
     // A freshly scrolled view can clamp its first target before its height expands.
     // Wait for local resource layout, then use the public display API on the same target.
     await this.diagnostics.measure(
@@ -441,10 +474,13 @@ class EpubReaderSession implements ReaderSession {
     const rendition = book.renderTo(this.options.host, {
       width,
       height,
-      manager: 'default',
+      manager: this.preferences.mode === 'scroll' ? 'continuous' : 'default',
+      offset: height,
       method: 'blobUrl',
       flow:
-        this.preferences.mode === 'paginated' ? 'paginated' : 'scrolled-doc',
+        this.preferences.mode === 'paginated'
+          ? 'paginated'
+          : 'scrolled-continuous',
       spread: 'none',
       gap: this.preferences.margin * 2,
       allowScriptedContent: false,
@@ -453,14 +489,30 @@ class EpubReaderSession implements ReaderSession {
       resizeOnOrientationChange: false,
     });
     this.rendition = rendition;
+    this.frameObserver = new MutationObserver(() => {
+      this.pruneContents();
+    });
+    this.frameObserver.observe(this.options.host, {
+      childList: true,
+      subtree: true,
+    });
     rendition.on('relocated', this.relocated);
     rendition.hooks.content.register((contents: Contents) => {
-      if (this.disposed) return;
+      const frame = contents.window.frameElement;
+      if (
+        this.disposed ||
+        this.rendition !== rendition ||
+        !frame ||
+        this.mounted.has(contents)
+      )
+        return;
       this.diagnostics.mark('iframe-content', 'success');
-      this.contentCleanup?.();
-      this.content = contents;
       this.styleContent(contents);
-      this.contentCleanup = this.listenToContent(contents);
+      this.mounted.set(contents, {
+        frame,
+        cleanup: this.listenToContent(contents),
+      });
+      this.drawHighlights();
     });
     await this.diagnostics.measure('renderer-started', () => rendition.started);
     this.ensureAlive();
@@ -518,8 +570,7 @@ class EpubReaderSession implements ReaderSession {
         'important',
       );
     }
-    const frame = this.options.host.querySelector('iframe');
-    frame?.setAttribute('title', 'Текст книги');
+    contents.window.frameElement?.setAttribute('title', 'Текст книги');
   }
   private chapter(location: Location): string {
     const path = this.options.index.spine[location.start.index]?.path;
@@ -527,7 +578,7 @@ class EpubReaderSession implements ReaderSession {
       (item) => item.path === path,
     );
     let title = candidates.find((item) => !item.fragment)?.label ?? '';
-    const content = this.content;
+    const content = this.contentFor(location.start.index);
     if (content && content.sectionIndex === location.start.index) {
       try {
         const current = content.range(location.start.cfi);
@@ -558,9 +609,11 @@ class EpubReaderSession implements ReaderSession {
     preserved?: ReadingCursor,
   ) {
     if (this.disposed || !location.start.cfi.startsWith('epubcfi(')) return;
-    const item = this.options.index.spine[location.start.index];
+    const index = preserved?.spineIndex ?? location.start.index;
+    const item = this.options.index.spine[index];
     if (!item) return;
-    if (!this.textIndex || !this.resolver || !this.content)
+    const content = this.contentFor(index);
+    if (!this.textIndex || !this.resolver || !content)
       throw new Error('Текстовая позиция ещё недоступна.');
     if (preserved) this.returnCursor = { ...preserved };
     else if (this.returnCursor) {
@@ -580,44 +633,46 @@ class EpubReaderSession implements ReaderSession {
     }
     const cursor =
       preserved ??
-      (this.returnCursor?.spineIndex === this.content.sectionIndex
-        ? this.returnCursor
-        : null) ??
-      this.resolver.fromCfi(
-        anchor ?? location.start.cfi,
-        this.content.document,
-      );
+      (this.returnCursor?.spineIndex === index ? this.returnCursor : null) ??
+      this.resolver.fromCfi(anchor ?? location.start.cfi, content.document);
     cursorSection(this.textIndex, cursor);
-    if (cursor.spineIndex !== this.content.sectionIndex)
+    if (cursor.spineIndex !== index)
       throw new Error('Отображаемый раздел не совпадает с текстовой позицией.');
-    const cfi = this.resolver.toCfi(cursor, this.content.document);
+    const cfi = this.resolver.toCfi(cursor, content.document);
     const result: ReaderLocation = {
       cfi,
       cursor,
       path: item.path,
-      spineIndex: location.start.index,
-      chapter: this.chapter(location),
+      spineIndex: index,
+      chapter: this.chapter({
+        ...location,
+        start: { ...location.start, index, cfi },
+      }),
       progression: new ReadingProgressService(this.textIndex).relative(cursor),
       atStart: location.atStart,
       atEnd: location.atEnd,
     };
     // Engine viewport boundaries, deliberately independent of the sticky restore cursor.
     try {
-      const start = this.resolver.fromCfi(
-        location.start.cfi,
-        this.content.document,
-      );
-      const end = this.resolver.fromCfi(
-        location.end.cfi,
-        this.content.document,
-      );
-      if (start.spineIndex === end.spineIndex && end.offset > start.offset)
-        result.visible = { start, end };
+      if (location.start.index === index) {
+        const start = this.resolver.fromCfi(
+          location.start.cfi,
+          content.document,
+        );
+        const end =
+          location.end.index === index
+            ? this.resolver.fromCfi(location.end.cfi, content.document)
+            : cursorAt(
+                this.textIndex,
+                index,
+                cursorSection(this.textIndex, start).text.length,
+              );
+        if (end.offset > start.offset) result.visible = { start, end };
+      }
     } catch {
       /* An unresolved boundary cannot be credited as read text. */
     }
     this.lastConfirmed = result;
-    this.drawHighlights();
     this.drawSpeedRange();
     this.options.onLocation(result);
   }
@@ -642,7 +697,8 @@ class EpubReaderSession implements ReaderSession {
               this.waitCleanup = null;
             };
             const confirmed = (location: Location) => {
-              if (!location.start.cfi) return;
+              if (!location.start.cfi || !this.contentFor(location.start.index))
+                return;
               this.latest = location;
               cleanup();
               resolve();
@@ -724,7 +780,8 @@ class EpubReaderSession implements ReaderSession {
   }
   private async sourceForSpeed(spineIndex: number): Promise<Document> {
     this.ensureAlive();
-    if (this.content?.sectionIndex === spineIndex) return this.content.document;
+    const content = this.contentFor(spineIndex);
+    if (content) return content.document;
     if (this.speedSource?.spineIndex === spineIndex)
       return this.speedSource.doc;
     if (!this.book) throw new Error('Книга закрыта.');
@@ -796,15 +853,11 @@ class EpubReaderSession implements ReaderSession {
     start: ReadingCursor,
     end: ReadingCursor,
   ): { left: number; top: number; width: number; height: number }[] {
-    if (
-      !this.content ||
-      this.content.sectionIndex !== start.spineIndex ||
-      !this.resolver
-    )
-      return [];
-    const range = this.resolver.rangeBetween(start, end, this.content.document);
+    const content = this.contentFor(start.spineIndex);
+    if (!content || !this.resolver) return [];
+    const range = this.resolver.rangeBetween(start, end, content.document);
     const host = this.options.host.getBoundingClientRect();
-    const frame = this.content.window.frameElement?.getBoundingClientRect();
+    const frame = content.window.frameElement?.getBoundingClientRect();
     if (!frame) return [];
     return Array.from(range.getClientRects())
       .filter(
@@ -982,7 +1035,8 @@ class EpubReaderSession implements ReaderSession {
     start: ReadingCursor,
     end: ReadingCursor,
   ): ReaderSelection | null {
-    if (!this.textIndex || !this.resolver || !this.content) return null;
+    const content = this.contentFor(start.spineIndex);
+    if (!this.textIndex || !this.resolver || !content) return null;
     const contentId = contentIdentity(this.options.file);
     if (!contentId) return null;
     const section = cursorSection(this.textIndex, start);
@@ -996,24 +1050,27 @@ class EpubReaderSession implements ReaderSession {
     return {
       anchor,
       quote: anchorText(this.textIndex, anchor),
-      cfi: this.resolver.rangeCfi(start, end, this.content.document),
+      cfi: this.resolver.rangeCfi(start, end, content.document),
     };
   }
+  private selectedRange(): { contents: Contents; range: Range } | null {
+    for (const [contents, { frame }] of this.mounted) {
+      if (!this.options.host.contains(frame)) continue;
+      const selection = contents.window.getSelection();
+      if (selection?.rangeCount && !selection.isCollapsed)
+        return { contents, range: selection.getRangeAt(0) };
+    }
+    return null;
+  }
   getSelection(): ReaderSelection | null {
-    const selection = this.content?.window.getSelection();
-    if (
-      !selection?.rangeCount ||
-      selection.isCollapsed ||
-      !this.content ||
-      !this.resolver
-    )
-      return null;
+    const selected = this.selectedRange();
+    if (!selected || !this.resolver) return null;
     try {
-      const range = selection.getRangeAt(0);
+      const { contents, range } = selected;
       const finish = range.cloneRange();
       finish.collapse(false);
-      const start = this.resolver.fromRange(this.content.sectionIndex, range);
-      const end = this.resolver.fromRange(this.content.sectionIndex, finish);
+      const start = this.resolver.fromRange(contents.sectionIndex, range);
+      const end = this.resolver.fromRange(contents.sectionIndex, finish);
       const result = this.capture(start, end);
       return result?.quote.trim() ? result : null;
     } catch {
@@ -1052,26 +1109,18 @@ class EpubReaderSession implements ReaderSession {
   }
   private drawHighlights(): void {
     const rendition = this.rendition;
-    if (!rendition || !this.content || !this.resolver || !this.textIndex)
-      return;
+    if (!rendition || !this.resolver || !this.textIndex) return;
     for (const cfi of this.drawnHighlights)
       rendition.annotations.remove(cfi, 'highlight');
     this.drawnHighlights = [];
     for (const item of this.highlights) {
       const a = item.anchor;
-      if (
-        !a ||
-        a.contentId !== contentIdentity(this.options.file) ||
-        a.start.spineIndex !== this.content.sectionIndex
-      )
-        continue;
+      if (!a || a.contentId !== contentIdentity(this.options.file)) continue;
+      const content = this.contentFor(a.start.spineIndex);
+      if (!content) continue;
       try {
         if (anchorText(this.textIndex, a) !== item.quote) continue;
-        const cfi = this.resolver.rangeCfi(
-          a.start,
-          a.end,
-          this.content.document,
-        );
+        const cfi = this.resolver.rangeCfi(a.start, a.end, content.document);
         rendition.annotations.highlight(
           cfi,
           {},
@@ -1090,18 +1139,11 @@ class EpubReaderSession implements ReaderSession {
     }
   }
   getSelectionCursor(): ReadingCursor | null {
-    const selection = this.content?.window.getSelection();
-    if (
-      !selection?.rangeCount ||
-      selection.isCollapsed ||
-      !this.content ||
-      !this.resolver ||
-      !this.textIndex
-    )
-      return null;
-    const range = selection.getRangeAt(0);
-    const cursor = this.resolver.fromRange(this.content.sectionIndex, range);
-    const canonical = this.resolver.toRange(cursor, this.content.document);
+    const selected = this.selectedRange();
+    if (!selected || !this.resolver || !this.textIndex) return null;
+    const { contents, range } = selected;
+    const cursor = this.resolver.fromRange(contents.sectionIndex, range);
+    const canonical = this.resolver.toRange(cursor, contents.document);
     const start = range.cloneRange();
     start.collapse(true);
     const section = cursorSection(this.textIndex, cursor);
@@ -1120,9 +1162,8 @@ class EpubReaderSession implements ReaderSession {
       throw new Error('Текстовый индекс не готов.');
     cursorSection(this.textIndex, cursor);
     const doc =
-      this.content?.sectionIndex === cursor.spineIndex
-        ? this.content.document
-        : await this.book.load(this.book.spine.get(cursor.spineIndex).url);
+      this.contentFor(cursor.spineIndex)?.document ??
+      (await this.book.load(this.book.spine.get(cursor.spineIndex).url));
     this.ensureAlive();
     if (!isDocument(doc)) throw new Error('DOM раздела недоступен.');
     return this.resolver.toCfi(cursor, doc);
@@ -1239,7 +1280,8 @@ class EpubReaderSession implements ReaderSession {
           this.releaseBook();
           await this.createBook();
         } else {
-          if (this.content) this.styleContent(this.content);
+          for (const contents of this.mounted.keys())
+            this.styleContent(contents);
           const { width, height } = this.measure();
           this.requireRendition().resize(width, height);
         }
@@ -1270,7 +1312,8 @@ class EpubReaderSession implements ReaderSession {
       const cfi = this.lastConfirmed?.cfi;
       void this.command(
         async () => {
-          if (this.content) this.styleContent(this.content);
+          for (const contents of this.mounted.keys())
+            this.styleContent(contents);
           this.requireRendition().resize(size.width, size.height);
           await this.display(cfi);
         },
@@ -1323,7 +1366,11 @@ class EpubReaderSession implements ReaderSession {
       if (explicit || number) {
         if (explicit) this.speedStop?.();
         const doc: unknown = await this.book.load('/' + target.path);
-        if (this.disposed || this.content !== contents) return;
+        if (
+          this.disposed ||
+          this.contentFor(contents.sectionIndex) !== contents
+        )
+          return;
         if (isDocument(doc)) {
           const note = doc.getElementById(target.fragment);
           const semantic = note?.closest(
@@ -1384,7 +1431,6 @@ class EpubReaderSession implements ReaderSession {
     if (!this.speedStop) await this.goTo(target);
   }
   private listenToContent(contents: Contents): () => void {
-    this.options.onSelection?.(null);
     const doc = contents.document;
     const source = this.options.index.spine[contents.sectionIndex]?.path;
     for (const anchor of doc.querySelectorAll('a[href]')) {
@@ -1425,7 +1471,11 @@ class EpubReaderSession implements ReaderSession {
       signal: listeners.signal,
     });
     const stopSelection = observeNativeSelection(doc, contents.window, () => {
-      if (!this.disposed && this.content === contents && !this.speedStop)
+      if (
+        !this.disposed &&
+        this.contentFor(contents.sectionIndex) === contents &&
+        !this.speedStop
+      )
         this.options.onSelection?.(this.getSelection());
     });
     const point = (event: PointerEvent) => {
@@ -1459,79 +1509,6 @@ class EpubReaderSession implements ReaderSession {
             );
         });
     };
-    // Complete a deliberate vertical gesture at a section boundary.
-    const scrollEdge = (direction: number) => {
-      const viewport = this.options.host.querySelector('.epub-container');
-      if (
-        !viewport ||
-        this.speedStop ||
-        this.preferences.mode !== 'scroll' ||
-        contents.window.getSelection()?.toString()
-      )
-        return false;
-      return direction > 0
-        ? viewport.scrollTop + viewport.clientHeight >=
-            viewport.scrollHeight - 2
-        : viewport.scrollTop <= 2;
-    };
-    let edgeGesture: {
-      x: number;
-      y: number;
-      top: boolean;
-      bottom: boolean;
-    } | null = null;
-    doc.addEventListener(
-      'touchstart',
-      (event) => {
-        const touch = event.touches.length === 1 ? event.touches[0] : undefined;
-        edgeGesture = touch
-          ? {
-              x: touch.clientX,
-              y: touch.clientY,
-              top: scrollEdge(-1),
-              bottom: scrollEdge(1),
-            }
-          : null;
-      },
-      { passive: true, signal: listeners.signal },
-    );
-    doc.addEventListener(
-      'touchend',
-      (event) => {
-        const first = edgeGesture;
-        const last = event.changedTouches[0];
-        edgeGesture = null;
-        if (!first || !last) return;
-        const dy = first.y - last.clientY;
-        if (
-          Math.abs(dy) < 48 ||
-          Math.abs(dy) < Math.abs(first.x - last.clientX) * 1.5
-        )
-          return;
-        if ((dy > 0 ? first.bottom : first.top) && scrollEdge(dy))
-          perform(dy > 0 ? 'next' : 'previous');
-      },
-      { passive: true, signal: listeners.signal },
-    );
-    doc.addEventListener(
-      'touchcancel',
-      () => {
-        edgeGesture = null;
-      },
-      { signal: listeners.signal },
-    );
-    let lastWheel = -Infinity;
-    doc.addEventListener(
-      'wheel',
-      (event) => {
-        const now = performance.now();
-        const fresh = now - lastWheel > 200;
-        lastWheel = now;
-        if (fresh && Math.abs(event.deltaY) >= 20 && scrollEdge(event.deltaY))
-          perform(event.deltaY > 0 ? 'next' : 'previous');
-      },
-      { passive: true, signal: listeners.signal },
-    );
     doc.addEventListener(
       'pointerdown',
       (event) => {
@@ -1678,7 +1655,6 @@ class EpubReaderSession implements ReaderSession {
       listeners.abort();
       stopSelection();
       if (tap) clearTimeout(tap);
-      if (this.content === contents) this.content = null;
     };
   }
   private endOperation() {
@@ -1697,8 +1673,8 @@ class EpubReaderSession implements ReaderSession {
     });
   }
   private releaseBook() {
-    this.contentCleanup?.();
-    this.contentCleanup = null;
+    this.clearContents();
+    this.drawnHighlights = [];
     this.rendition?.off('relocated', this.relocated);
     this.rendition = null;
     if (!this.openingBook) {
@@ -1728,8 +1704,7 @@ class EpubReaderSession implements ReaderSession {
     this.observer = null;
     if (this.resizeTimer) clearTimeout(this.resizeTimer);
     this.resizeTimer = null;
-    this.contentCleanup?.();
-    this.contentCleanup = null;
+    this.clearContents();
     this.rendition?.off('relocated', this.relocated);
     if (this.operations === 0) this.queueRelease();
     this.buffer = null;
