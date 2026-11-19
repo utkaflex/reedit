@@ -67,6 +67,38 @@ function isDocument(value: unknown): value is Document {
 
 class EpubReaderSession implements ReaderSession {
   private readonly diagnostics = new ReaderDiagnostics();
+  private originalSpeedMode: ReaderPreferences['mode'] | null = null;
+  private centerFrame = 0;
+  async setSpeedCentering(enabled: boolean): Promise<void> {
+    if (enabled === (this.originalSpeedMode !== null)) return;
+    const deadline = performance.now() + 5000;
+    while (this.gate.busy && !this.disposed && performance.now() < deadline)
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          resolve();
+        });
+      });
+    this.ensureAlive();
+    if (enabled && this.originalSpeedMode === null) {
+      const mode = this.preferences.mode;
+      if (
+        mode !== 'scroll' &&
+        !(await this.setPreferences({ ...this.preferences, mode: 'scroll' }))
+      )
+        throw new Error('Не удалось включить прокрутку.');
+      this.originalSpeedMode = mode;
+    } else if (!enabled && this.originalSpeedMode !== null) {
+      if (
+        this.preferences.mode !== this.originalSpeedMode &&
+        !(await this.setPreferences({
+          ...this.preferences,
+          mode: this.originalSpeedMode,
+        }))
+      )
+        throw new Error('Не удалось восстановить режим страницы.');
+      this.originalSpeedMode = null;
+    }
+  }
   private speedStop: (() => void) | null = null;
   private returnCursor: ReadingCursor | null = null;
   private speedSource: { spineIndex: number; doc: Document } | null = null;
@@ -464,6 +496,8 @@ class EpubReaderSession implements ReaderSession {
     // Publisher CSS must not disable the reader's native selection contract.
     style.textContent +=
       'html,body,body p,body span,body div,body li,body blockquote,body h1,body h2,body h3,body h4 { -webkit-user-select:text !important; user-select:text !important; -webkit-touch-callout:default !important; }';
+    style.textContent +=
+      'a[role="doc-noteref"], a[epub\\:type~="noteref"] { vertical-align:super; font-size:.76em !important; font-weight:700; text-decoration:underline; }';
     contents.document.documentElement.style.touchAction = 'pan-y pinch-zoom';
     contents.document.body.style.touchAction = 'pan-y pinch-zoom';
     for (const image of contents.document.querySelectorAll<
@@ -785,14 +819,27 @@ class EpubReaderSession implements ReaderSession {
         height: rect.height,
       }));
   }
-  private drawSpeedRange(): void {
+  private drawSpeedRange(animate = true): void {
     if (!this.speedRange || this.disposed) return;
     const overlay = this.speedOverlay ?? document.createElement('div');
     overlay.className = 'speed-highlight-layer';
     overlay.setAttribute('aria-hidden', 'true');
     const rects = this.speedRects(this.speedRange.start, this.speedRange.end);
+    // Inline markup can yield several DOM rectangles for one line.
+    const lines: typeof rects = [];
+    for (const rect of rects) {
+      const line = lines.find(
+        (candidate) => Math.abs(candidate.top - rect.top) < rect.height / 3,
+      );
+      if (!line) lines.push({ ...rect });
+      else {
+        const right = Math.max(line.left + line.width, rect.left + rect.width);
+        line.left = Math.min(line.left, rect.left);
+        line.width = right - line.left;
+      }
+    }
     const old = Array.from(overlay.children);
-    rects.forEach((rect, index) => {
+    lines.forEach((rect, index) => {
       const previous = old[index];
       const mark =
         previous instanceof HTMLSpanElement
@@ -803,7 +850,10 @@ class EpubReaderSession implements ReaderSession {
         Number.isFinite(top) && Math.abs(top - rect.top) < rect.height / 2;
       mark.className = 'speed-word-highlight';
       mark.style.transition =
-        sameLine && this.preferences.animations && !this.motion.matches
+        animate &&
+        sameLine &&
+        this.preferences.animations &&
+        !this.motion.matches
           ? 'left 65ms linear, width 65ms linear'
           : 'none';
       Object.assign(mark.style, {
@@ -815,19 +865,25 @@ class EpubReaderSession implements ReaderSession {
         borderRadius: '6px',
         background: 'rgba(180,140,85,.24)',
       });
-      if (!sameLine && this.preferences.animations && !this.motion.matches)
+      if (
+        animate &&
+        !sameLine &&
+        this.preferences.animations &&
+        !this.motion.matches
+      )
         mark.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 55 });
-      overlay.append(mark);
+      if (!mark.isConnected) overlay.append(mark);
     });
-    old.slice(rects.length).forEach((mark) => {
+    old.slice(lines.length).forEach((mark) => {
       mark.remove();
     });
-    this.options.host.append(overlay);
+    if (!overlay.isConnected) this.options.host.append(overlay);
     this.speedOverlay = overlay;
   }
   async showSpeedRange(
     start: ReadingCursor,
     end: ReadingCursor,
+    center = false,
   ): Promise<void> {
     if (!this.textIndex) throw new Error('Текстовый индекс не готов.');
     const section = cursorSection(this.textIndex, start);
@@ -860,8 +916,37 @@ class EpubReaderSession implements ReaderSession {
     }
     this.speedRange = { start: { ...start }, end: { ...end } };
     this.drawSpeedRange();
+    if (center) this.centerSpeedLine(start, firstEnd);
+  }
+  private centerSpeedLine(start: ReadingCursor, end: ReadingCursor): void {
+    cancelAnimationFrame(this.centerFrame);
+    const container =
+      this.options.host.querySelector<HTMLElement>('.epub-container');
+    const line = this.speedRects(start, end)[0];
+    if (!container || !line) return;
+    const from = container.scrollTop;
+    const to = Math.max(
+      0,
+      Math.min(
+        container.scrollHeight - container.clientHeight,
+        from + line.top + line.height / 2 - this.options.host.clientHeight / 2,
+      ),
+    );
+    if (Math.abs(to - from) < 2) return;
+    const began = performance.now();
+    const duration =
+      !this.preferences.animations || this.motion.matches ? 0 : 100;
+    const move = (now: number) => {
+      if (this.disposed || !this.speedRange) return;
+      const fraction = duration ? Math.min(1, (now - began) / duration) : 1;
+      container.scrollTop = from + (to - from) * (1 - (1 - fraction) ** 3);
+      this.drawSpeedRange(false);
+      if (fraction < 1) this.centerFrame = requestAnimationFrame(move);
+    };
+    move(began);
   }
   clearSpeedRange(): void {
+    cancelAnimationFrame(this.centerFrame);
     if (this.flashTimer) clearTimeout(this.flashTimer);
     this.flashTimer = null;
     this.speedRange = null;
@@ -1205,9 +1290,69 @@ class EpubReaderSession implements ReaderSession {
     window.visualViewport?.addEventListener('resize', this.viewportResize);
     this.motion.addEventListener('change', this.motionChanged);
   }
+  private async followLink(
+    anchor: Element,
+    target: ReaderTarget,
+    contents: Contents,
+  ): Promise<void> {
+    if (this.options.onFootnote && target.fragment && this.book) {
+      const explicit =
+        anchor.getAttribute('role') === 'doc-noteref' ||
+        (
+          anchor.getAttributeNS('http://www.idpf.org/2007/ops', 'type') ??
+          anchor.getAttribute('epub:type') ??
+          ''
+        )
+          .split(/\s+/)
+          .includes('noteref');
+      const number = /^\[?\d+\]?$/.test(anchor.textContent.trim());
+      if (explicit || number) {
+        if (explicit) this.speedStop?.();
+        const doc: unknown = await this.book.load('/' + target.path);
+        if (this.disposed || this.content !== contents) return;
+        if (isDocument(doc)) {
+          const note = doc.getElementById(target.fragment);
+          const semantic = note?.closest(
+            '[role="doc-footnote"],[role="doc-endnote"]',
+          );
+          const epubNote =
+            note &&
+            ['footnote', 'endnote', 'rearnote'].some((type) =>
+              (note.getAttribute('epub:type') ?? '')
+                .split(/\s+/)
+                .includes(type),
+            );
+          const noteBody = (semantic ?? note)?.cloneNode(true);
+          if (noteBody?.nodeType === 1) {
+            for (const block of (noteBody as Element).querySelectorAll(
+              'p,li,h1,h2,h3,h4,h5,h6,br',
+            ))
+              block.after(doc.createTextNode('\n'));
+          }
+          const text = noteBody?.textContent?.trim();
+          if (text && (explicit || semantic || epubNote)) {
+            this.speedStop?.();
+            this.options.onFootnote(text);
+            return;
+          }
+        }
+      }
+    }
+    if (!this.speedStop) await this.goTo(target);
+  }
   private listenToContent(contents: Contents): () => void {
     this.options.onSelection?.(null);
     const doc = contents.document;
+    for (const anchor of doc.querySelectorAll('a.fb2-a[href]')) {
+      const fragment = anchor.getAttribute('href')?.split('#')[1];
+      if (
+        fragment &&
+        this.options.fb2NoteReferences?.has(
+          fragment + ':' + anchor.textContent.trim(),
+        )
+      )
+        anchor.setAttribute('role', 'doc-noteref');
+    }
     const listeners = new AbortController();
     for (const name of ['pointerdown', 'keydown', 'wheel', 'touchmove'])
       doc.addEventListener(name, () => this.options.onInteraction?.(), {
@@ -1251,7 +1396,7 @@ class EpubReaderSession implements ReaderSession {
     let lastTap = -Infinity;
     const perform = (kind: 'next' | 'previous' | 'toggle' | 'none') => {
       if (kind === 'toggle') this.options.onToggleControls();
-      else if (kind !== 'none')
+      else if (kind !== 'none' && !this.speedStop)
         void this[kind]().catch((error: unknown) => {
           if (!this.disposed)
             this.options.onError(
@@ -1264,11 +1409,6 @@ class EpubReaderSession implements ReaderSession {
     doc.addEventListener(
       'pointerdown',
       (event) => {
-        if (this.speedStop) {
-          this.speedStop();
-          start = null;
-          return;
-        }
         pointers.add(event.pointerId);
         if (pointers.size > 1) {
           multitouch = true;
@@ -1361,10 +1501,6 @@ class EpubReaderSession implements ReaderSession {
           target && 'nodeType' in target && target.nodeType === 1
             ? (target as Element)
             : null;
-        if (this.speedStop) {
-          event.preventDefault();
-          return;
-        }
         const anchor = element?.closest('a');
         if (!anchor) return;
         event.preventDefault();
@@ -1374,11 +1510,13 @@ class EpubReaderSession implements ReaderSession {
           const path = this.options.index.spine[contents.sectionIndex]?.path;
           if (!path) return;
           const resolved = resolveReference(path, href);
-          void this.goTo(resolved).catch((error: unknown) => {
-            this.options.onError(
-              error instanceof Error ? error.message : 'Ссылка недоступна',
-            );
-          });
+          void this.followLink(anchor, resolved, contents).catch(
+            (error: unknown) => {
+              this.options.onError(
+                error instanceof Error ? error.message : 'Ссылка недоступна',
+              );
+            },
+          );
         } catch {
           this.options.onError('Внешние ссылки в читалке отключены.');
         }

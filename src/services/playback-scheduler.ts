@@ -65,6 +65,15 @@ export class PlaybackScheduler {
     this.cancel = null;
     this.options.changed();
   }
+  retime(ratio: number): void {
+    if (this.playing) {
+      const now = this.clock.now();
+      this.deadline = now + Math.max(0, this.deadline - now) * ratio;
+      if (!this.pending) this.arm();
+    } else {
+      this.remaining *= ratio;
+    }
+  }
   private arm(): void {
     if (!this.playing || this.disposed) return;
     this.cancel?.();
@@ -100,7 +109,7 @@ export class PlaybackScheduler {
     try {
       await this.pending;
       if (this.isPlaying() && this.clock.now() >= this.deadline)
-        this.deadline = this.clock.now() + duration;
+        this.deadline = this.clock.now() + this.options.duration(next);
     } catch (error) {
       this.pause();
       this.options.error(error);

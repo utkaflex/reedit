@@ -492,3 +492,72 @@
     display: inline;
   }
 }
+.reader-bottom {
+  min-height: 58px;
+}
+.reader-footer-content {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  position: relative;
+}
+.reader-footer-content .reader-navigation {
+  grid-area: 1 / 1;
+}
+.reader-footer-content .reader-progress-row {
+  grid-area: 1 / 2;
+  padding-bottom: 8px;
+  gap: 4px;
+}
+.reader-footer-content > progress {
+  grid-area: 1 / 2;
+  align-self: end;
+  margin-bottom: 10px;
+}
+.reader-footer-content .reader-actions {
+  grid-area: 1 / 3;
+  display: block;
+}
+.reader-actions .reader-save-state:not(:empty) {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 12px);
+  background: var(--color-surface);
+  padding: 4px 8px;
+  border-radius: 6px;
+  pointer-events: none;
+}
+.reader-screen .reader-footnote[open] {
+  inset: 0 0 0 auto !important;
+  translate: none !important;
+  margin: 0;
+  width: min(100%, 26rem);
+  height: 100dvh;
+  max-height: 100dvh !important;
+  border-radius: 16px 0 0 16px;
+  padding: max(16px, env(safe-area-inset-top)) 16px
+    max(16px, env(safe-area-inset-bottom));
+  animation: footnote-enter 160ms ease-out;
+}
+.reader-footnote-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  touch-action: pan-y;
+  min-height: 80px;
+}
+@keyframes footnote-enter {
+  from {
+    transform: translateX(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reader-footnote[open] {
+    animation: none;
+  }
+}
+/* Selection actions may sit over the foot of the page without reflowing the iframe. */
+.reader-bottom .selection-actions {
+  inset: auto 0 0;
+  min-height: 100%;
+  max-height: min(9rem, 35dvh);
+  border-top: 1px solid var(--color-border);
+}

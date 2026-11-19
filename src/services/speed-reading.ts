@@ -153,6 +153,7 @@ export class SpeedReadingService {
         await this.reader.showSpeedRange(
           this.wordCursor(index),
           this.wordCursor(end, true),
+          this.snapshot.preferences.centerFocus !== false,
         );
       if (this.isCancelled() || !this.isActive()) return;
       if (this.isHidden())
@@ -218,6 +219,11 @@ export class SpeedReadingService {
       this.reader.setSpeedInteraction(() => {
         this.pause();
       });
+      if (mode === 'guided')
+        await this.reader.setSpeedCentering?.(
+          this.snapshot.preferences.centerFocus !== false,
+        );
+      if (this.isCancelled(generation)) return;
       this.scheduler = new PlaybackScheduler({
         completed: (ordinal) => {
           const word = this.words[ordinal];
@@ -297,22 +303,21 @@ export class SpeedReadingService {
       );
     });
   }
+  private speedWrite = Promise.resolve();
   async adjustSpeed(delta: number): Promise<void> {
-    return this.change(async () => {
-      const playing = this.snapshot.playing;
-      const preferences = {
-        ...this.snapshot.preferences,
-        wpm: Math.max(
-          100,
-          Math.min(900, this.snapshot.preferences.wpm + delta),
-        ),
-      };
-      this.scheduler?.pause();
-      this.snapshot.preferences = preferences;
-      this.emit();
-      await saveSpeedPreferences(this.store, preferences);
-      if (playing && !this.isHidden()) this.scheduler?.play();
-    });
+    if (this.disposed || this.snapshot.preparing) return;
+    const oldSpeed = this.snapshot.preferences.wpm;
+    const wpm = Math.max(100, Math.min(900, oldSpeed + delta));
+    if (wpm === oldSpeed) return;
+    const preferences = { ...this.snapshot.preferences, wpm };
+    this.snapshot.preferences = preferences;
+    this.scheduler?.retime(oldSpeed / wpm);
+    this.emit();
+    const write = this.speedWrite.then(() =>
+      saveSpeedPreferences(this.store, preferences),
+    );
+    this.speedWrite = write.catch(() => undefined);
+    await write;
   }
   async configure(preferences: SpeedPreferences): Promise<void> {
     return this.change(async () => {
@@ -323,8 +328,14 @@ export class SpeedReadingService {
       )
         return;
       this.pause();
+      await this.scheduler?.drain();
+      await this.speedWrite;
       await saveSpeedPreferences(this.store, preferences);
       this.snapshot.preferences = structuredClone(preferences);
+      if (this.snapshot.mode === 'guided')
+        await this.reader.setSpeedCentering?.(
+          preferences.centerFocus !== false,
+        );
       if (this.scheduler) await this.scheduler.seek(this.scheduler.index);
       this.emit();
     });
@@ -338,6 +349,7 @@ export class SpeedReadingService {
       }
       await this.scheduler?.drain();
       await this.persist();
+      await this.reader.setSpeedCentering?.(false);
       if (this.cursor) {
         await this.reader.showSpeedRange(
           this.cursor,

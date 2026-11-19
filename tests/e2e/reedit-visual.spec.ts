@@ -99,14 +99,15 @@ for (const width of [320, 390, 1440]) {
     const progress = await location.getAttribute('value');
     const frame = page.locator('.reader-host iframe');
     const geometry = await frame.boundingBox();
-    await page
-      .getByRole('button', { name: 'Скрыть панели', exact: true })
-      .click();
-    await expect(
-      page.getByRole('button', { name: 'Показать панели' }),
-    ).toBeVisible();
+    const pane = await page.getByTestId('reader-host').boundingBox();
+    if (!pane) throw Error('Missing book surface');
+    const toggle = () =>
+      page.mouse.click(pane.x + pane.width / 2, pane.y + pane.height / 2);
+    await toggle();
+    await expect(page.locator('.reader-top')).toBeHidden();
     expect(await frame.boundingBox()).toEqual(geometry);
-    await page.getByRole('button', { name: 'Показать панели' }).click();
+    await toggle();
+    await expect(page.locator('.reader-top')).toBeVisible();
     await expect(location).toHaveAttribute('value', progress ?? '');
     if (width === 390) {
       await page
@@ -144,7 +145,7 @@ for (const width of [320, 390, 1440]) {
         await page.getByRole('button', { name: 'Пауза', exact: true }).click();
         await shot(name);
         await page
-          .getByRole('button', { name: 'Вернуться к тексту', exact: true })
+          .getByRole('button', { name: 'К тексту', exact: true })
           .click();
         await expect(
           page.getByRole('button', { name: 'Оформление чтения' }),

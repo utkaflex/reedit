@@ -168,13 +168,14 @@ test('время и слова трёх режимов сохраняются; �
     .getByRole('button', { name: 'Предыдущая страница', exact: true })
     .click();
   expect((await totals(page)).words).toBe(0);
+  await page.getByRole('button', { name: 'Действия книги' }).click();
   const confirm = page.getByRole('button', {
     name: 'Отметить фрагмент прочитанным',
     exact: true,
   });
   await expect(confirm).toBeEnabled({ timeout: 15000 });
   await confirm.click();
-  await expect(confirm).toBeDisabled();
+  await expect(confirm).toBeHidden();
   await expect
     .poll(async () => (await totals(page)).words, { timeout: 10000 })
     .toBeGreaterThan(0);
@@ -184,11 +185,9 @@ test('время и слова трёх режимов сохраняются; �
   await expect(
     page.getByRole('button', { name: 'Продолжить', exact: true }),
   ).toBeEnabled();
-  await page.getByRole('button', { name: 'Вперёд по словам' }).click();
   expect((await totals(page)).words).toBe(normal);
-  await page.getByRole('button', { name: /WPM · Настройки/ }).click();
-  await page.getByRole('slider').focus();
-  await page.getByRole('slider').press('End');
+  await page.getByRole('button', { name: /слов\/мин/ }).click();
+  await page.getByRole('spinbutton', { name: 'Слов в минуту' }).fill('900');
   await page
     .getByRole('button', { name: 'Применить настройки', exact: true })
     .click();
@@ -198,18 +197,14 @@ test('время и слова трёх режимов сохраняются; �
   await expect(
     page.getByText('Книга закончилась', { exact: true }),
   ).toBeVisible({ timeout: 10000 });
-  await page
-    .getByRole('button', { name: 'Вернуться к тексту', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'К тексту', exact: true }).click();
   await speedButton.click();
   await page.getByRole('button', { name: 'С подсветкой текста' }).click();
   await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
   await expect(
     page.getByText('Книга закончилась', { exact: true }),
   ).toBeVisible({ timeout: 10000 });
-  await page
-    .getByRole('button', { name: 'Вернуться к тексту', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'К тексту', exact: true }).click();
   await page
     .getByRole('button', { name: 'Закрыть книгу', exact: true })
     .click();

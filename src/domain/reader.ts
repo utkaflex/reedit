@@ -65,9 +65,14 @@ export interface ReaderSession {
   getTextIndex?(): DocumentTextIndex | null;
   getSpeedDocument(): Promise<SpeedDocument>;
   resolveLocation(cursor: ReadingCursor): Promise<ReaderLocation>;
-  showSpeedRange(start: ReadingCursor, end: ReadingCursor): Promise<void>;
+  showSpeedRange(
+    start: ReadingCursor,
+    end: ReadingCursor,
+    center?: boolean,
+  ): Promise<void>;
   clearSpeedRange(): void;
   flashCursor(cursor: ReadingCursor): Promise<void>;
+  setSpeedCentering?(enabled: boolean): Promise<void>;
   setSpeedInteraction(onStop: (() => void) | null): void;
   getSelection(): ReaderSelection | null;
   getBookmark(): ReaderSelection | null;
@@ -96,6 +101,8 @@ export interface ReaderOpenOptions {
   signal: AbortSignal;
   onSelection?: (selection: ReaderSelection | null) => void;
   onLocation: (location: ReaderLocation) => void;
+  fb2NoteReferences?: ReadonlySet<string>;
+  onFootnote?: (note: string) => void;
   onToggleControls: () => void;
   onBusy: (busy: boolean) => void;
   onError: (message: string) => void;

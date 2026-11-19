@@ -16,16 +16,16 @@ import './speed-reading.css';
 
 export function RsvpWord({
   snapshot,
-  pause,
+  toggleControls,
 }: {
   snapshot: SpeedSnapshot;
-  pause: () => void;
+  toggleControls: () => void;
 }) {
   const parts = focusParts(snapshot.word);
   const focus =
     snapshot.preferences.focusLetter && Array.from(snapshot.word).length <= 40;
   return (
-    <div className="rsvp-stage" onPointerDown={pause}>
+    <div className="rsvp-stage" onClick={toggleControls}>
       <p className="rsvp-heading">
         <span>Чтение по словам</span>
         <span>{snapshot.preferences.wpm} слов/мин</span>
@@ -52,7 +52,7 @@ export function RsvpWord({
       </output>
       <p className="caption rsvp-hint">
         {snapshot.playing
-          ? 'Коснитесь страницы, чтобы остановиться'
+          ? ''
           : snapshot.ended
             ? 'Вы дошли до конца книги'
             : 'Продолжите, когда будете готовы'}
@@ -103,7 +103,7 @@ export function SpeedControls({
         <Button
           variant="quiet"
           aria-label="Уменьшить скорость"
-          disabled={p.wpm <= 100}
+          disabled={snapshot.preparing || p.wpm <= 100}
           onClick={() => {
             run((session) => session.adjustSpeed(-10));
           }}
@@ -122,7 +122,7 @@ export function SpeedControls({
         <Button
           variant="quiet"
           aria-label="Увеличить скорость"
-          disabled={p.wpm >= 900}
+          disabled={snapshot.preparing || p.wpm >= 900}
           onClick={() => {
             run((session) => session.adjustSpeed(10));
           }}
@@ -131,7 +131,9 @@ export function SpeedControls({
         </Button>
         <Button
           aria-label={snapshot.playing ? 'Пауза' : 'Продолжить'}
-          disabled={snapshot.preparing || snapshot.ended}
+          disabled={
+            snapshot.preparing || snapshot.ended || snapshot.ordinal === 0
+          }
           onClick={() => {
             if (snapshot.playing) service?.pause();
             else run((session) => session.play());
@@ -139,58 +141,12 @@ export function SpeedControls({
         >
           <Icon name={snapshot.playing ? 'pause' : 'play'} />
         </Button>
-        <details className="speed-more">
-          <summary
-            className="button button--quiet"
-            aria-label="Действия скорочтения"
-          >
-            <Icon name="more" />
-          </summary>
-          <div className="speed-more-menu">
-            <Button
-              variant="quiet"
-              onClick={() => {
-                service?.pause();
-                setSettings(structuredClone(snapshot.preferences));
-              }}
-            >
-              Настройки
-            </Button>
-            <Button
-              variant="quiet"
-              onClick={() => {
-                run((session) => session.seek('back'));
-              }}
-            >
-              Назад по словам
-            </Button>
-            <Button
-              variant="quiet"
-              onClick={() => {
-                run((session) => session.seek('forward'));
-              }}
-            >
-              Вперёд по словам
-            </Button>
-            <Button
-              variant="quiet"
-              onClick={() => {
-                run((session) => session.seek('sentence'));
-              }}
-            >
-              Предыдущее предложение
-            </Button>
-            <Button
-              variant="quiet"
-              onClick={() => {
-                run((session) => session.stop());
-              }}
-            >
-              Вернуться к тексту
-            </Button>
-          </div>
-        </details>
       </div>
+      {snapshot.ended && (
+        <p role="status" className="caption">
+          Книга закончилась
+        </p>
+      )}
       {snapshot.error && (
         <p className="error-text" role="alert">
           {snapshot.error}
@@ -235,7 +191,7 @@ export function SpeedControls({
                 inputMode="numeric"
                 min={100}
                 max={900}
-                step={10}
+                step={1}
                 value={p.wpm}
                 onChange={(event) => {
                   configure({ ...p, wpm: Number(event.target.value) });
@@ -305,6 +261,18 @@ export function SpeedControls({
                   +
                 </Button>
               </div>
+            )}
+            {snapshot.mode === 'guided' && (
+              <label className="speed-checkbox">
+                <input
+                  type="checkbox"
+                  checked={p.centerFocus !== false}
+                  onChange={(event) => {
+                    configure({ ...p, centerFocus: event.target.checked });
+                  }}
+                />
+                Фокус по центру
+              </label>
             )}
             <section>
               <h3>Интеллектуальные паузы</h3>

@@ -364,10 +364,9 @@ test('касания и выделение не вызывают двойное 
   const box = await host.boundingBox();
   if (!box) throw new Error('Нет области чтения');
   await page.mouse.click(box.x + box.width / 2, box.y + 100);
-  await expect(
-    page.getByRole('button', { name: 'Показать панели' }),
-  ).toBeVisible();
-  await page.getByRole('button', { name: 'Показать панели' }).click();
+  await expect(page.locator('.reader-top')).toBeHidden();
+  await page.mouse.click(box.x + box.width / 2, box.y + 100);
+  await expect(page.locator('.reader-top')).toBeVisible();
   const before = await position(page);
   await page
     .frameLocator('iframe')
@@ -431,9 +430,7 @@ test('нативные сенсорные жесты: один свайп — о
     .click();
   await expect.poll(() => position(page)).toBe(initial);
   await page.touchscreen.tap(box.x + box.width / 2, box.y + 100);
-  await expect(
-    page.getByRole('button', { name: 'Показать панели' }),
-  ).toBeVisible();
+  await expect(page.locator('.reader-top')).toBeHidden();
   await cdp.detach();
 });
 

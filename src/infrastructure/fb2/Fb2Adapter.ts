@@ -155,6 +155,32 @@ function decode(bytes: Uint8Array): string {
   );
 }
 
+/** Read note references from the original without changing the stored EPUB representation. */
+export function fb2NoteReferences(buffer: ArrayBuffer): ReadonlySet<string> {
+  const decoded = decode(new Uint8Array(buffer));
+  const doc = parseXml(
+    new TextEncoder().encode(decoded),
+    'FB2',
+    32 * 1024 * 1024,
+  );
+  const ids = new Map<string, string>();
+  const links: Element[] = [];
+  for (const element of Array.from(doc.getElementsByTagName('*'))) {
+    const id = element.getAttribute('id');
+    if (id) ids.set(id, 'fb2-' + String(ids.size + 1));
+    if (element.localName === 'a' && element.getAttribute('type') === 'note')
+      links.push(element);
+  }
+  const references = new Set<string>();
+  for (const link of links) {
+    const reference = href(link);
+    if (!reference.startsWith('#')) continue;
+    const id = ids.get(fragmentId(reference));
+    if (id) references.add(id + ':' + link.textContent.trim());
+  }
+  return references;
+}
+
 export class Fb2Adapter {
   constructor(private epub = new EpubJsAdapter()) {}
   async analyze(

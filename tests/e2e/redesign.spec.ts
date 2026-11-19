@@ -219,9 +219,7 @@ for (const width of [390, 1440]) {
       path: test.info().outputPath('rsvp.png'),
       scale: 'css',
     });
-    await page
-      .getByRole('button', { name: 'Вернуться к тексту', exact: true })
-      .click();
+    await page.getByRole('button', { name: 'К тексту', exact: true }).click();
     await expect(page.locator('.speed-word-highlight')).toHaveCount(0);
     await expect(
       page.getByRole('button', { name: 'Оформление чтения', exact: true }),

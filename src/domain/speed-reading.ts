@@ -8,6 +8,7 @@ export interface SpeedPreferences {
   wpm: number;
   focusLetter: boolean;
   guidedWords: number;
+  centerFocus?: boolean;
   pauses: {
     ordinary: number;
     long: number;
@@ -21,6 +22,7 @@ export const defaultSpeedPreferences: SpeedPreferences = {
   wpm: 250,
   focusLetter: true,
   guidedWords: 3,
+  centerFocus: true,
   longWordLength: 10,
   pauses: { ordinary: 1, long: 1.3, comma: 1.5, sentence: 2.2, paragraph: 2.8 },
 };
@@ -30,6 +32,8 @@ export function validSpeedPreferences(value: SpeedPreferences): boolean {
     value.wpm >= 100 &&
     value.wpm <= 900 &&
     typeof value.focusLetter === 'boolean' &&
+    (value.centerFocus === undefined ||
+      typeof value.centerFocus === 'boolean') &&
     Number.isInteger(value.guidedWords) &&
     value.guidedWords >= 1 &&
     value.guidedWords <= 12 &&
@@ -183,6 +187,7 @@ export function frameEnd(
   while (
     end + 1 < words.length &&
     end - start + 1 < count &&
+    !words[end]?.sentenceEnd &&
     !words[end]?.paragraphEnd &&
     words[end + 1]?.spineIndex === words[start]?.spineIndex
   )

@@ -55,6 +55,10 @@ export function ReaderScreen({
   });
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState<'saving' | 'saved' | 'error'>('saved');
+  const [footnote, setFootnote] = useState<string | null>(null);
+  const [bookActions, setBookActions] = useState(false);
+  const noteSwipe = useRef<{ x: number; y: number } | null>(null);
+  const [showSaved, setShowSaved] = useState(false);
   const [controls, setControls] = useState(true);
   const [panel, setPanel] = useState<'settings' | 'contents' | null>(null);
   const [retry, setRetry] = useState(0);
@@ -92,6 +96,7 @@ export function ReaderScreen({
     await writer.current?.flush();
   }, []);
   const speedChanged = useCallback((active: boolean) => {
+    if (speedActive.current !== active) setControls(true);
     speedActive.current = active;
   }, []);
   const speed = useSpeedReading(
@@ -102,6 +107,15 @@ export function ReaderScreen({
     activity.speedState,
     activity.completed,
   );
+  useEffect(() => {
+    if (saving !== 'saved' || !location) return;
+    const timer = setTimeout(() => {
+      setShowSaved(false);
+    }, 1500);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [saving, location]);
   useEffect(() => {
     const meta = document.querySelector('meta[name="theme-color"]');
     const root = document.documentElement;
@@ -165,6 +179,7 @@ export function ReaderScreen({
     const positions = createPositionWriter(store, address, (next, message) => {
       if (!abort.signal.aborted) {
         setSaving(next);
+        setShowSaved(next === 'saved');
         if (message) setNotice(message);
       }
     });
@@ -225,8 +240,11 @@ export function ReaderScreen({
               if (!speedActive.current) positions.push(next);
             }
           },
+          onFootnote: (note) => {
+            if (!abort.signal.aborted) setFootnote(note);
+          },
           onToggleControls: () => {
-            if (!abort.signal.aborted && !speedActive.current) {
+            if (!abort.signal.aborted) {
               if (selectedFragment.current) clearSelection();
               else setControls((value) => !value);
             }
@@ -398,79 +416,102 @@ export function ReaderScreen({
       <header
         className={`reader-top ${controls ? '' : 'reader-chrome-hidden'}`}
       >
-        <Button
-          variant="quiet"
-          className="icon-button"
-          aria-label="Закрыть книгу"
-          onClick={() => {
-            void close();
-          }}
-        >
-          <Icon name="back" />
-        </Button>
-        <h1 title={title}>{title}</h1>
-        <Button
-          variant="quiet"
-          aria-label="Цитаты и закладки"
-          disabled={state !== 'ready' || busy}
-          onPointerDown={() => {
-            const value = session.current?.getSelection();
-            if (value) {
-              selectedFragment.current = value;
-              setSelection(value);
-            }
-          }}
-          onTouchEnd={(event) => {
-            // iOS can consume the compatibility click while dismissing its
-            // selection menu. Finish the touch directly, without a ghost click.
-            event.preventDefault();
-            quoteTouchAt.current = performance.now();
-            openQuotes();
-          }}
-          onClick={() => {
-            if (performance.now() - quoteTouchAt.current > 700) openQuotes();
-          }}
-        >
-          <Icon name="quote" />
-        </Button>
-        <Button
-          variant="quiet"
-          aria-label="Добавить закладку"
-          disabled={state !== 'ready' || busy}
-          onClick={() => {
-            setNotesPanel('bookmark');
-          }}
-        >
-          <Icon name="bookmark" />
-        </Button>
-        <Button
-          variant="quiet"
-          disabled={state !== 'ready' || busy}
-          aria-label="Оглавление"
-          onClick={() => {
-            setPanel('contents');
-          }}
-        >
-          <Icon name="contents" />
-        </Button>
-        <Button
-          variant="quiet"
-          disabled={state !== 'ready' || busy}
-          aria-label="Оформление чтения"
-          onClick={() => {
-            setPanel('settings');
-          }}
-        >
-          Aa
-        </Button>
+        {speed.snapshot.active ? (
+          <Button
+            variant="quiet"
+            onClick={() => {
+              speed.run((session) => session.stop());
+            }}
+          >
+            <Icon name="back" /> К тексту
+          </Button>
+        ) : (
+          <>
+            <Button
+              variant="quiet"
+              className="icon-button"
+              aria-label="Закрыть книгу"
+              onClick={() => {
+                void close();
+              }}
+            >
+              <Icon name="back" />
+            </Button>
+            <h1 title={title}>{title}</h1>
+            <Button
+              variant="quiet"
+              aria-label="Цитаты и закладки"
+              disabled={state !== 'ready' || busy}
+              onPointerDown={() => {
+                const value = session.current?.getSelection();
+                if (value) {
+                  selectedFragment.current = value;
+                  setSelection(value);
+                }
+              }}
+              onTouchEnd={(event) => {
+                // iOS can consume the compatibility click while dismissing its
+                // selection menu. Finish the touch directly, without a ghost click.
+                event.preventDefault();
+                quoteTouchAt.current = performance.now();
+                openQuotes();
+              }}
+              onClick={() => {
+                if (performance.now() - quoteTouchAt.current > 700)
+                  openQuotes();
+              }}
+            >
+              <Icon name="quote" />
+            </Button>
+            <Button
+              variant="quiet"
+              aria-label="Добавить закладку"
+              disabled={state !== 'ready' || busy}
+              onClick={() => {
+                setNotesPanel('bookmark');
+              }}
+            >
+              <Icon name="bookmark" />
+            </Button>
+            <Button
+              variant="quiet"
+              disabled={state !== 'ready' || busy}
+              aria-label="Оглавление"
+              onClick={() => {
+                setPanel('contents');
+              }}
+            >
+              <Icon name="contents" />
+            </Button>
+            <Button
+              variant="quiet"
+              disabled={state !== 'ready' || busy}
+              aria-label="Оформление чтения"
+              onClick={() => {
+                setPanel('settings');
+              }}
+            >
+              Aa
+            </Button>
+            <Button
+              variant="quiet"
+              aria-label="Действия книги"
+              onClick={() => {
+                setBookActions(true);
+              }}
+            >
+              <Icon name="more" />
+            </Button>
+          </>
+        )}
       </header>
       <section className="reader-stage" aria-label="Область чтения">
         <div ref={host} className="reader-host" data-testid="reader-host" />
         {speed.snapshot.active && speed.snapshot.mode === 'rsvp' && (
           <RsvpWord
             snapshot={speed.snapshot}
-            pause={() => {
-              speed.service?.pause();
+            toggleControls={() => {
+              setControls((value) => !value);
             }}
           />
         )}
@@ -534,7 +575,9 @@ export function ReaderScreen({
           </div>
         )}
       </section>
-      <footer className="reader-bottom">
+      <footer
+        className={`reader-bottom ${controls || selection || notice ? '' : 'reader-chrome-hidden'}`}
+      >
         {activity.error && (
           <div role="alert" className="form-error">
             {activity.error}{' '}
@@ -576,17 +619,6 @@ export function ReaderScreen({
                 max="1"
                 value={location?.progression ?? 0}
               />
-              <Button
-                variant="quiet"
-                className="reader-confirm"
-                aria-label="Отметить фрагмент прочитанным"
-                disabled={!activity.canConfirm || busy}
-                onClick={activity.confirm}
-                title="Я прочитал видимый фрагмент. Перелистывания сами по себе не учитывают прочитанные слова."
-              >
-                <Icon name="check" />
-                <span>Отметить прочитанным</span>
-              </Button>
               <div
                 className="reader-navigation"
                 role="group"
@@ -642,32 +674,12 @@ export function ReaderScreen({
                           ? 'Сохраняем позицию…'
                           : saving === 'error'
                             ? 'Позиция не сохранена'
-                            : 'Позиция сохранена'}
+                            : showSaved
+                              ? 'Позиция сохранена'
+                              : ''}
                 </span>
-                <Button
-                  variant="quiet"
-                  className="icon-button"
-                  aria-label="Скрыть панели"
-                  title="Скрыть панели"
-                  onClick={() => {
-                    setControls(false);
-                  }}
-                >
-                  <Icon name="hide" />
-                </Button>
               </div>
             </div>
-            {!controls && !notice && (
-              <Button
-                className="reader-show-controls"
-                variant="quiet"
-                onClick={() => {
-                  setControls(true);
-                }}
-              >
-                Показать панели
-              </Button>
-            )}
             {notice && (
               <div
                 className="reader-notice"
@@ -715,6 +727,68 @@ export function ReaderScreen({
           </>
         )}
       </footer>
+      {bookActions && (
+        <Dialog
+          open
+          title="Действия книги"
+          onClose={() => {
+            setBookActions(false);
+          }}
+        >
+          <Button
+            disabled={!activity.canConfirm || busy}
+            onClick={() => {
+              activity.confirm();
+              setBookActions(false);
+            }}
+          >
+            Отметить фрагмент прочитанным
+          </Button>
+        </Dialog>
+      )}
+      {footnote && (
+        <Dialog
+          open
+          title="Примечание"
+          className="reader-footnote"
+          onClose={() => {
+            setFootnote(null);
+          }}
+          footer={
+            <Button
+              onClick={() => {
+                setFootnote(null);
+              }}
+            >
+              К тексту
+            </Button>
+          }
+        >
+          <div
+            className="reader-footnote-text"
+            onTouchStart={(event) => {
+              const touch = event.touches[0];
+              noteSwipe.current = touch
+                ? { x: touch.clientX, y: touch.clientY }
+                : null;
+            }}
+            onTouchEnd={(event) => {
+              const start = noteSwipe.current;
+              noteSwipe.current = null;
+              const touch = event.changedTouches[0];
+              if (
+                start &&
+                touch &&
+                touch.clientX - start.x > 60 &&
+                Math.abs(touch.clientY - start.y) < 40
+              )
+                setFootnote(null);
+            }}
+          >
+            {footnote}
+          </div>
+        </Dialog>
+      )}
       {speedChooser && (
         <Dialog
           open

@@ -51,12 +51,11 @@ export function useSpeedReading(
     };
     document.addEventListener('visibilitychange', visibility);
     window.addEventListener('pagehide', hide);
-    window.addEventListener('blur', hide);
+    // Entering the EPUB iframe can blur the outer window while the app remains visible.
     document.addEventListener('freeze', hide);
     return () => {
       document.removeEventListener('visibilitychange', visibility);
       window.removeEventListener('pagehide', hide);
-      window.removeEventListener('blur', hide);
       document.removeEventListener('freeze', hide);
       service?.destroy();
       onActive(false);

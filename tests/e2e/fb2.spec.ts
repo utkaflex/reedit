@@ -100,10 +100,9 @@ test('FB2: оригинал, изображения, примечания и о�
     .frameLocator('iframe')
     .getByRole('link', { name: '1', exact: true })
     .click();
-  await expect(page.locator('.reader-chapter')).toContainText('Примечание 1');
-  await expect(page.frameLocator('iframe').locator('body')).toContainText(
-    'Текст примечания.',
-  );
+  const note = page.getByRole('dialog', { name: 'Примечание' });
+  await expect(note).toContainText('Текст примечания.');
+  await note.getByRole('button', { name: 'К тексту' }).click();
   await page.getByRole('button', { name: 'Закрыть книгу' }).click();
   await expect(
     page.getByRole('heading', { name: /^(Моя )?Библиотека$/, exact: true }),
@@ -119,7 +118,9 @@ test('FB2: оригинал, изображения, примечания и о�
   await expect(
     page.getByRole('button', { name: 'Оформление чтения' }),
   ).toBeEnabled({ timeout: 20000 });
-  await expect(page.locator('.reader-chapter')).toContainText('Примечание 1');
+  await expect(page.frameLocator('iframe').locator('body')).toContainText(
+    'Продолжение и примечание',
+  );
   await page.getByRole('button', { name: 'Закрыть книгу' }).click();
   await expect(
     page.getByRole('heading', { name: /^(Моя )?Библиотека$/, exact: true }),

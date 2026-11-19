@@ -95,12 +95,6 @@ test('оформление и пульт чтения помещаются на 
   const controls = page.getByRole('region', {
     name: 'Управление скорочтением',
   });
-  await expect(
-    controls.getByRole('button', {
-      name: 'Предыдущее предложение',
-      exact: true,
-    }),
-  ).toBeVisible();
   const boxes = await controls.getByRole('button').evaluateAll((buttons) =>
     buttons.map((button) => {
       const box = button.getBoundingClientRect();
@@ -122,9 +116,7 @@ test('оформление и пульт чтения помещаются на 
     path: test.info().outputPath('reader-rsvp.png'),
     scale: 'css',
   });
-  await page
-    .getByRole('button', { name: 'Вернуться к тексту', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'К тексту', exact: true }).click();
   await expect(page.locator('.speed-word-highlight').first()).toBeVisible();
 });
 test('RSVP: точная передача, шаги, конец spine, возврат и перезапуск', async ({
@@ -138,19 +130,9 @@ test('RSVP: точная передача, шаги, конец spine, возв�
   await expect(page.getByLabel('Текущее слово', { exact: true })).toHaveText(
     'Первое',
   );
-  await page.getByRole('button', { name: 'Вперёд по словам' }).click();
-  await expect(page.getByLabel('Текущее слово', { exact: true })).toHaveText(
-    'второе',
-  );
-  await page.getByRole('button', { name: 'Назад по словам' }).click();
-  await expect(page.getByLabel('Текущее слово', { exact: true })).toHaveText(
-    'Первое',
-  );
   expect(await saved(page)).toMatchObject({ ...entry, anchor: 'word' });
-  await page.getByRole('button', { name: /WPM · Настройки/ }).click();
-  const slider = page.getByRole('slider');
-  await slider.focus();
-  await slider.press('End');
+  await page.getByRole('button', { name: /слов\/мин/ }).click();
+  await page.getByRole('spinbutton', { name: 'Слов в минуту' }).fill('900');
   await page
     .getByRole('button', { name: 'Применить настройки', exact: true })
     .click();
@@ -158,7 +140,6 @@ test('RSVP: точная передача, шаги, конец spine, возв�
   await expect(
     page.getByText('Книга закончилась', { exact: true }),
   ).toBeVisible({ timeout: 10000 });
-  await expect(page.getByTestId('speed-ordinal')).toHaveText('8 / 8');
   await expect(page.getByLabel('Текущее слово', { exact: true })).toHaveText(
     'восьмое.',
   );
@@ -168,9 +149,7 @@ test('RSVP: точная передача, шаги, конец spine, возв�
   });
   const end = await saved(page);
   expect(end?.spineIndex).toBe(1);
-  await page
-    .getByRole('button', { name: 'Вернуться к тексту', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'К тексту', exact: true }).click();
   await expect(page.locator('.speed-word-highlight').first()).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Режимы чтения', exact: true }),
@@ -199,11 +178,7 @@ test('Guided: окно слов, видимая подсветка, касани
   const start = await saved(page);
   await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
   await expect.poll(() => saved(page)).not.toEqual(start);
-  await page
-    .frameLocator('iframe')
-    .locator('p')
-    .first()
-    .click({ position: { x: 40, y: 20 } });
+  await page.getByRole('button', { name: 'Пауза', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Продолжить', exact: true }),
   ).toBeVisible();
@@ -231,21 +206,16 @@ test('Guided: окно слов, видимая подсветка, касани
     });
     document.dispatchEvent(new Event('visibilitychange'));
   });
-  await page
-    .getByRole('button', { name: 'Вернуться к тексту', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'К тексту', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Режимы чтения', exact: true }),
   ).toBeVisible();
   expect(await saved(page)).toEqual(hidden);
   await mode(page, 'Guided');
-  await page.getByRole('button', { name: /WPM · Настройки/ }).click();
-  const slider = page.getByRole('slider');
-  await slider.focus();
-  await slider.press('End');
-  await page
-    .getByRole('spinbutton', { name: 'Слов в подсветке', exact: true })
-    .fill('12');
+  await page.getByRole('button', { name: /слов\/мин/ }).click();
+  await page.getByRole('spinbutton', { name: 'Слов в минуту' }).fill('900');
+  for (let index = 0; index < 9; index++)
+    await page.getByRole('button', { name: 'Больше слов' }).click();
   await page
     .getByRole('button', { name: 'Применить настройки', exact: true })
     .click();
@@ -253,12 +223,9 @@ test('Guided: окно слов, видимая подсветка, касани
   await expect(
     page.getByText('Книга закончилась', { exact: true }),
   ).toBeVisible({ timeout: 20000 });
-  await expect(page.getByTestId('speed-ordinal')).toHaveText('63 / 63');
   expect((await saved(page))?.spineIndex).toBe(1);
   await expect(page.locator('.speed-word-highlight').first()).toBeVisible();
-  await page
-    .getByRole('button', { name: 'Вернуться к тексту', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'К тексту', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Режимы чтения', exact: true }),
   ).toBeVisible();

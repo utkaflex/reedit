@@ -276,3 +276,25 @@
 .speed-controls section > .form-stack {
   margin-top: 12px;
 }
+.reader-screen[data-speed-active='true']
+  .reader-top:not(.reader-chrome-hidden) {
+  visibility: visible;
+}
+.reader-screen[data-speed-active='true'] .reader-bottom {
+  padding-block: 8px 4px;
+}
+.speed-inline {
+  grid-template-columns: 44px minmax(0, 1fr) 44px 44px;
+}
+.speed-controls > :is([role='status'], [role='alert']) {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 12px;
+  right: 12px;
+  margin: 0 auto;
+  width: fit-content;
+  max-width: calc(100% - 24px);
+  padding: 4px 8px;
+  background: var(--color-surface);
+  border-radius: 6px;
+}
