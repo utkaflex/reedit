@@ -22,6 +22,7 @@ for (const width of [320, 390]) {
             text: '',
             markup: `<p>Начало <a role="doc-noteref" href="notes.xhtml#short">1</a> и <a role="doc-noteref" href="notes.xhtml#long">2</a>.</p><p>${Array.from({ length: 15 }, () => sentence).join(', ')}.</p>`,
           },
+          { name: 'next.xhtml', text: 'Другая глава начинается у пристани.' },
           {
             name: 'notes.xhtml',
             text: '',
@@ -29,7 +30,7 @@ for (const width of [320, 390]) {
             markup: `<aside id="short" role="doc-footnote">Краткое примечание.</aside><aside id="long" role="doc-footnote">${longNote}</aside>`,
           },
         ],
-        toc: [0],
+        toc: [0, 1],
       });
       const fb2 = makeFb2Fixture()
         .source.replace(
@@ -53,8 +54,13 @@ for (const width of [320, 390]) {
         ),
       });
       await page.getByRole('button', { name: 'Добавить и читать' }).click();
-      if (format === 'fb2')
-        await page.getByRole('button', { name: 'Следующая страница' }).click();
+      if (format === 'fb2') {
+        await page.getByRole('button', { name: 'Оформление чтения' }).waitFor();
+        const book = page.getByRole('button', { name: 'Оформление чтения' });
+        await expect(book).toBeEnabled();
+        await page.getByRole('button', { name: 'Оглавление' }).click();
+        await page.getByRole('button', { name: 'Начало', exact: true }).click();
+      }
       const frame = page.locator('iframe').last().contentFrame();
       for (const [index, label] of (format === 'epub'
         ? ['1', '2']
@@ -88,17 +94,55 @@ for (const width of [320, 390]) {
           box.y + box.height / 2,
         );
       };
-      await expect(
-        page.getByRole('button', { name: 'Режимы чтения' }),
-      ).toBeEnabled();
+      await expect(page.getByRole('button', { name: 'Режимы' })).toBeEnabled();
       const geometry = await host.boundingBox();
+      if (!geometry) throw Error('No reader surface');
+      for (const bar of ['.reader-top', '.reader-bottom']) {
+        const buttons = page.locator(bar).getByRole('button');
+        for (const button of await buttons.all()) {
+          const rect = await button.boundingBox();
+          if (!rect) continue;
+          expect(rect.width).toBeGreaterThanOrEqual(44);
+          expect(rect.height).toBeGreaterThanOrEqual(44);
+          expect(
+            bar === '.reader-top'
+              ? rect.y + rect.height <= geometry.y
+              : rect.y >= geometry.y + geometry.height,
+          ).toBe(true);
+        }
+      }
       await tapCenter();
+      await expect(page.locator('.reader-top')).toBeHidden();
       await expect(page.locator('.reader-bottom')).toBeHidden();
       expect(await host.boundingBox()).toEqual(geometry);
       await tapCenter();
       await expect(page.locator('.reader-bottom')).toBeVisible();
+      const progress = page.getByRole('progressbar', {
+        name: 'Прогресс по читаемому тексту',
+      });
+      const origin = await progress.getAttribute('value');
+      await page.getByRole('button', { name: 'Оглавление' }).click();
+      await page.getByRole('button', { name: 'Раздел 2', exact: true }).click();
+      await expect(frame.locator('body')).toContainText('Другая глава');
+      await page.getByRole('button', { name: 'К месту', exact: true }).click();
+      await expect(frame.locator('body')).toContainText('Когда мы вышли');
+      await expect(progress).toHaveAttribute('value', origin ?? '');
+      await page.getByRole('button', { name: 'Оформление чтения' }).click();
+      const appearance = page.getByRole('dialog', {
+        name: 'Оформление чтения',
+      });
+      await expect(
+        appearance.getByRole('radio', { name: 'Книжный' }),
+      ).toBeVisible();
+      await appearance.getByRole('button', { name: 'Увеличить шрифт' }).click();
+      await appearance
+        .getByRole('button', { name: 'Применить оформление' })
+        .click();
+      await expect(appearance).toBeHidden();
+      await expect(progress).toHaveAttribute('value', origin ?? '');
+
       for (const mode of ['По одному слову', 'С подсветкой текста']) {
-        await page.getByRole('button', { name: 'Режимы чтения' }).click();
+        await page.getByRole('button', { name: 'Режимы' }).click();
         await page.getByRole('button', { name: mode, exact: true }).click();
         const play = page.getByRole('button', {
           name: 'Продолжить',
@@ -141,9 +185,91 @@ for (const width of [320, 390]) {
         }
         await back.click();
         await expect(
-          page.getByRole('button', { name: 'Режимы чтения' }),
+          page.getByRole('button', { name: 'Режимы' }),
         ).toBeEnabled();
       }
+    });
+  }
+}
+
+const personalFixture = process.env.REEDIT_VISUAL_EPUB;
+if (personalFixture) {
+  for (const width of [320, 390]) {
+    test(`снимки реальной книги ${String(width)}`, async ({ page }) => {
+      test.setTimeout(45000);
+      await page.setViewportSize({ width, height: 800 });
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.addInitScript(() => {
+        localStorage.setItem('reedit-reader-gesture', 'seen');
+      });
+      await page.goto('/');
+      await libraryAction(page, 'upload');
+      await page
+        .getByLabel('Файл книги', { exact: true })
+        .setInputFiles(personalFixture);
+      await page.getByRole('button', { name: 'Добавить и читать' }).click();
+      const appearance = page.getByRole('button', {
+        name: 'Оформление чтения',
+      });
+      await expect(appearance).toBeEnabled();
+      await page.getByRole('button', { name: 'Оглавление' }).click();
+      const toc = page.getByRole('dialog', { name: 'Оглавление' });
+      await toc
+        .getByRole('button', { name: /Кровавый спорт/i })
+        .first()
+        .click();
+      const host = page.getByTestId('reader-host');
+      await expect(appearance).toBeEnabled();
+      await expect(
+        host.locator('iframe').last().contentFrame().locator('body'),
+      ).toContainText(/Кровавый спорт/i);
+      await page.getByRole('button', { name: 'Оглавление' }).click();
+      await toc.getByRole('button', { name: 'Читать отсюда' }).click();
+      const area = await host.boundingBox();
+      if (!area) throw Error('No reading surface');
+      await page.screenshot({
+        path: test.info().outputPath('controls.png'),
+        scale: 'css',
+      });
+      await page.touchscreen.tap(
+        area.x + area.width / 2,
+        area.y + area.height / 2,
+      );
+      await expect(appearance).toBeHidden();
+      await page.screenshot({
+        path: test.info().outputPath('clean.png'),
+        scale: 'css',
+      });
+      await page.touchscreen.tap(
+        area.x + area.width / 2,
+        area.y + area.height / 2,
+      );
+      await appearance.click();
+      await expect(
+        page.getByRole('dialog', { name: 'Оформление чтения' }),
+      ).toBeVisible();
+      await page.screenshot({
+        path: test.info().outputPath('appearance.png'),
+        scale: 'css',
+      });
+      await page.getByRole('radio', { name: 'Прокрутка', exact: true }).check();
+      await page.getByRole('button', { name: 'Применить оформление' }).click();
+      await expect(appearance).toBeEnabled();
+      await page.getByRole('button', { name: 'Оглавление' }).click();
+      await toc.getByText(/Все текстовые разделы/).click();
+      await toc.getByRole('button', { name: /chapter-005.xhtml/ }).click();
+      const link = host
+        .locator('iframe')
+        .last()
+        .contentFrame()
+        .getByRole('link', { name: '[1]', exact: true });
+      await expect(link).toHaveCSS('vertical-align', 'super');
+      await link.click();
+      const note = page.getByRole('dialog', { name: 'Примечание' });
+      await expect(note.locator('.reader-footnote-text')).not.toHaveText('1');
+      await expect(note.locator('.reader-footnote-text')).toBeVisible();
+      await note.getByRole('button', { name: 'К тексту', exact: true }).click();
+      await expect(note).toBeHidden();
     });
   }
 }

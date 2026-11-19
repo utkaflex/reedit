@@ -131,9 +131,7 @@ for (const width of [320, 390]) {
     await expect(
       page.getByRole('button', { name: 'Оформление чтения' }),
     ).toBeEnabled({ timeout: 20000 });
-    await page
-      .getByRole('button', { name: 'Следующая страница', exact: true })
-      .click();
+    await page.locator('.reader-screen').press('ArrowRight');
     await page
       .getByRole('button', { name: 'Закрыть книгу', exact: true })
       .click();

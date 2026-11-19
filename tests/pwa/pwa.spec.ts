@@ -185,7 +185,7 @@ async function addBook(page: Page) {
     .getByRole('button', { name: 'Читать файл offline.epub', exact: true })
     .click();
   await expect(
-    page.getByRole('button', { name: 'Следующая страница', exact: true }),
+    page.getByRole('button', { name: 'Оформление чтения' }),
   ).toBeEnabled({ timeout: 20000 });
   return fixture;
 }
@@ -229,12 +229,11 @@ test('возврат к книге во время применения обно
   });
   await ready(page);
   await addBook(page);
-  await page
-    .getByRole('button', { name: 'Следующая страница', exact: true })
-    .click();
-  await expect(
-    page.getByText('Позиция сохранена', { exact: true }),
-  ).toBeVisible();
+  await page.locator('.reader-screen').press('ArrowRight');
+  await expect(page.locator('.reader-screen')).toHaveAttribute(
+    'data-position-state',
+    'saved',
+  );
   const readerHash = new URL(page.url()).hash;
   await page
     .getByRole('button', { name: 'Закрыть книгу', exact: true })
@@ -280,12 +279,11 @@ test('полный ZIP скачивается и восстанавливает�
   await page.setViewportSize({ width: 320, height: 740 });
   await ready(page);
   await addBook(page);
-  await page
-    .getByRole('button', { name: 'Следующая страница', exact: true })
-    .click();
-  await expect(
-    page.getByText('Позиция сохранена', { exact: true }),
-  ).toBeVisible();
+  await page.locator('.reader-screen').press('ArrowRight');
+  await expect(page.locator('.reader-screen')).toHaveAttribute(
+    'data-position-state',
+    'saved',
+  );
   const readerUrl = page.url();
   await page
     .getByRole('button', { name: 'Закрыть книгу', exact: true })
@@ -367,7 +365,7 @@ test('полный ZIP скачивается и восстанавливает�
   ).toBeVisible();
   await page.goto(readerUrl);
   await expect(
-    page.getByRole('button', { name: 'Предыдущая страница', exact: true }),
+    page.getByRole('button', { name: 'Оформление чтения' }),
   ).toBeEnabled({ timeout: 20000 });
   await expect(page.frameLocator('iframe').locator('body')).toContainText(
     'Последний раздел',
@@ -392,12 +390,11 @@ test('закрытый браузер запускается офлайн из �
     const page = await context.newPage();
     await ready(page);
     await addBook(page);
-    await page
-      .getByRole('button', { name: 'Следующая страница', exact: true })
-      .click();
-    await expect(
-      page.getByText('Позиция сохранена', { exact: true }),
-    ).toBeVisible();
+    await page.locator('.reader-screen').press('ArrowRight');
+    await expect(page.locator('.reader-screen')).toHaveAttribute(
+      'data-position-state',
+      'saved',
+    );
     readerUrl = page.url();
     await page
       .getByRole('button', { name: 'Закрыть книгу', exact: true })
@@ -415,7 +412,7 @@ test('закрытый браузер запускается офлайн из �
     const page = await context.newPage();
     await page.goto(readerUrl);
     await expect(
-      page.getByRole('button', { name: 'Предыдущая страница', exact: true }),
+      page.getByRole('button', { name: 'Оформление чтения' }),
     ).toBeEnabled({ timeout: 20000 });
     await expect(page.frameLocator('iframe').locator('body')).toContainText(
       'Последний раздел',
@@ -473,12 +470,11 @@ test('обновление ожидает закрытия книги и дру�
   test.setTimeout(90000);
   await ready(page);
   await addBook(page);
-  await page
-    .getByRole('button', { name: 'Следующая страница', exact: true })
-    .click();
-  await expect(
-    page.getByText('Позиция сохранена', { exact: true }),
-  ).toBeVisible();
+  await page.locator('.reader-screen').press('ArrowRight');
+  await expect(page.locator('.reader-screen')).toHaveAttribute(
+    'data-position-state',
+    'saved',
+  );
   const url = page.url();
   await request.post('/__test/1');
   await page.evaluate(async () => {

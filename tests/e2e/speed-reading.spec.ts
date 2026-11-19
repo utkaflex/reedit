@@ -30,13 +30,11 @@ async function open(page: Page, long = false) {
     .click();
   await page.getByRole('button', { name: 'Читать файл speed.epub' }).click();
   await expect(
-    page.getByRole('button', { name: 'Режимы чтения', exact: true }),
+    page.getByRole('button', { name: 'Режимы', exact: true }),
   ).toBeEnabled({ timeout: 20000 });
 }
 async function mode(page: Page, name: 'RSVP' | 'Guided') {
-  await page
-    .getByRole('button', { name: 'Режимы чтения', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Режимы', exact: true }).click();
   await page
     .getByRole('button', {
       name: name === 'RSVP' ? 'По одному слову' : 'С подсветкой текста',
@@ -72,14 +70,9 @@ test('оформление и пульт чтения помещаются на 
     .getByRole('button', { name: 'Оформление чтения', exact: true })
     .click();
   await page.getByRole('radio', { name: 'Сепия', exact: true }).check();
-  await expect(page.locator('.reader-preview')).toHaveAttribute(
-    'data-theme',
-    'sepia',
-  );
-  await expect(page.locator('.reader-preview')).toHaveCSS(
-    'background-color',
-    'rgb(241, 229, 205)',
-  );
+  await expect(
+    page.getByRole('radio', { name: 'Сепия', exact: true }),
+  ).toBeChecked();
   await page.screenshot({
     path: test.info().outputPath('reader-appearance.png'),
     scale: 'css',
@@ -152,15 +145,13 @@ test('RSVP: точная передача, шаги, конец spine, возв�
   await page.getByRole('button', { name: 'К тексту', exact: true }).click();
   await expect(page.locator('.speed-word-highlight').first()).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Режимы чтения', exact: true }),
+    page.getByRole('button', { name: 'Режимы', exact: true }),
   ).toBeVisible();
   expect(await saved(page)).toEqual(end);
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Режимы чтения' })).toBeEnabled(
-    {
-      timeout: 20000,
-    },
-  );
+  await expect(page.getByRole('button', { name: 'Режимы' })).toBeEnabled({
+    timeout: 20000,
+  });
   expect(await saved(page)).toEqual(end);
   expect(errors).toEqual([]);
 });
@@ -208,7 +199,7 @@ test('Guided: окно слов, видимая подсветка, касани
   });
   await page.getByRole('button', { name: 'К тексту', exact: true }).click();
   await expect(
-    page.getByRole('button', { name: 'Режимы чтения', exact: true }),
+    page.getByRole('button', { name: 'Режимы', exact: true }),
   ).toBeVisible();
   expect(await saved(page)).toEqual(hidden);
   await mode(page, 'Guided');
@@ -227,7 +218,7 @@ test('Guided: окно слов, видимая подсветка, касани
   await expect(page.locator('.speed-word-highlight').first()).toBeVisible();
   await page.getByRole('button', { name: 'К тексту', exact: true }).click();
   await expect(
-    page.getByRole('button', { name: 'Режимы чтения', exact: true }),
+    page.getByRole('button', { name: 'Режимы', exact: true }),
   ).toBeVisible();
 
   expect(

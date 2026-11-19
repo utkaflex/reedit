@@ -56,9 +56,10 @@ export function ReaderScreen({
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState<'saving' | 'saved' | 'error'>('saved');
   const [footnote, setFootnote] = useState<string | null>(null);
-  const [bookActions, setBookActions] = useState(false);
+  const chapterOrigin = useRef<ReaderLocation | null>(null);
+  const [chapterPreview, setChapterPreview] = useState(false);
   const noteSwipe = useRef<{ x: number; y: number } | null>(null);
-  const [showSaved, setShowSaved] = useState(false);
+  const [gestureHint, setGestureHint] = useState(false);
   const [controls, setControls] = useState(true);
   const [panel, setPanel] = useState<'settings' | 'contents' | null>(null);
   const [retry, setRetry] = useState(0);
@@ -92,8 +93,10 @@ export function ReaderScreen({
   } = activity;
   const speedPosition = useCallback(async (next: ReaderLocation) => {
     setLocation(next);
-    writer.current?.push(next);
-    await writer.current?.flush();
+    if (!chapterOrigin.current) {
+      writer.current?.push(next);
+      await writer.current?.flush();
+    }
   }, []);
   const speedChanged = useCallback((active: boolean) => {
     if (speedActive.current !== active) setControls(true);
@@ -108,14 +111,24 @@ export function ReaderScreen({
     activity.completed,
   );
   useEffect(() => {
-    if (saving !== 'saved' || !location) return;
-    const timer = setTimeout(() => {
-      setShowSaved(false);
-    }, 1500);
+    if (state !== 'ready') return;
+    try {
+      if (localStorage.getItem('reedit-reader-gesture')) return;
+      localStorage.setItem('reedit-reader-gesture', 'seen');
+    } catch {
+      /* Reading is available when browser storage is restricted. */
+    }
+    const show = setTimeout(() => {
+      setGestureHint(true);
+    }, 0);
+    const hide = setTimeout(() => {
+      setGestureHint(false);
+    }, 4500);
     return () => {
-      clearTimeout(timer);
+      clearTimeout(show);
+      clearTimeout(hide);
     };
-  }, [saving, location]);
+  }, [state]);
   useEffect(() => {
     const meta = document.querySelector('meta[name="theme-color"]');
     const root = document.documentElement;
@@ -179,7 +192,6 @@ export function ReaderScreen({
     const positions = createPositionWriter(store, address, (next, message) => {
       if (!abort.signal.aborted) {
         setSaving(next);
-        setShowSaved(next === 'saved');
         if (message) setNotice(message);
       }
     });
@@ -237,7 +249,8 @@ export function ReaderScreen({
                 clearSelection();
               setLocation(next);
               observeActivity(next);
-              if (!speedActive.current) positions.push(next);
+              if (!speedActive.current && !chapterOrigin.current)
+                positions.push(next);
             }
           },
           onFootnote: (note) => {
@@ -245,6 +258,7 @@ export function ReaderScreen({
           },
           onToggleControls: () => {
             if (!abort.signal.aborted) {
+              setGestureHint(false);
               if (selectedFragment.current) clearSelection();
               else setControls((value) => !value);
             }
@@ -388,6 +402,8 @@ export function ReaderScreen({
       className="reader-screen"
       data-reader-theme={preferences.theme}
       data-speed-active={speed.snapshot.active}
+      data-at-end={location?.atEnd ?? false}
+      data-position-state={saving}
       data-motion={preferences.animations ? 'on' : 'off'}
       aria-label="Читалка"
       onKeyDown={(event) => {
@@ -492,15 +508,6 @@ export function ReaderScreen({
               }}
             >
               Aa
-            </Button>
-            <Button
-              variant="quiet"
-              aria-label="Действия книги"
-              onClick={() => {
-                setBookActions(true);
-              }}
-            >
-              <Icon name="more" />
             </Button>
           </>
         )}
@@ -619,41 +626,44 @@ export function ReaderScreen({
                 max="1"
                 value={location?.progression ?? 0}
               />
-              <div
-                className="reader-navigation"
-                role="group"
-                aria-label="Перелистывание"
-              >
-                <Button
-                  variant="quiet"
-                  aria-label={
-                    preferences.mode === 'scroll'
-                      ? 'Предыдущий раздел'
-                      : 'Предыдущая страница'
-                  }
-                  disabled={state !== 'ready' || busy || location?.atStart}
-                  onClick={() => {
-                    command((reader) => reader.previous());
-                  }}
-                >
-                  <Icon name="previous" />
-                </Button>
-                <Button
-                  variant="quiet"
-                  aria-label={
-                    preferences.mode === 'scroll'
-                      ? 'Следующий раздел'
-                      : 'Следующая страница'
-                  }
-                  disabled={state !== 'ready' || busy || location?.atEnd}
-                  onClick={() => {
-                    command((reader) => reader.next());
-                  }}
-                >
-                  <Icon name="next" />
-                </Button>
-              </div>
               <div className="reader-actions">
+                {chapterPreview && (
+                  <Button
+                    variant="quiet"
+                    disabled={busy}
+                    onClick={() => {
+                      const origin = chapterOrigin.current;
+                      if (!origin) return;
+                      command(async (reader) => {
+                        const restored = origin.cursor
+                          ? await reader.goToCursor(origin.cursor)
+                          : await reader.goTo({ path: origin.path });
+                        if (restored) {
+                          chapterOrigin.current = null;
+                          setChapterPreview(false);
+                          writer.current?.push(origin);
+                        }
+                        return restored;
+                      });
+                    }}
+                  >
+                    К месту
+                  </Button>
+                )}
+                {!chapterPreview && activity.canConfirm && !busy && (
+                  <Button
+                    variant="quiet"
+                    aria-label="Отметить фрагмент прочитанным"
+                    onClick={activity.confirm}
+                  >
+                    <Icon name="check" />
+                  </Button>
+                )}
+                {gestureHint && (
+                  <span className="reader-gesture-hint">
+                    Тап по центру скрывает панели
+                  </span>
+                )}
                 <Button
                   variant="quiet"
                   disabled={state !== 'ready' || busy}
@@ -661,23 +671,8 @@ export function ReaderScreen({
                     setSpeedChooser(true);
                   }}
                 >
-                  Режимы чтения
+                  Режимы
                 </Button>
-                <span className="reader-save-state" role="status">
-                  {state === 'loading'
-                    ? 'Открываем книгу…'
-                    : state === 'error'
-                      ? 'Чтение недоступно'
-                      : busy
-                        ? 'Обновляем страницу…'
-                        : saving === 'saving'
-                          ? 'Сохраняем позицию…'
-                          : saving === 'error'
-                            ? 'Позиция не сохранена'
-                            : showSaved
-                              ? 'Позиция сохранена'
-                              : ''}
-                </span>
               </div>
             </div>
             {notice && (
@@ -727,25 +722,6 @@ export function ReaderScreen({
           </>
         )}
       </footer>
-      {bookActions && (
-        <Dialog
-          open
-          title="Действия книги"
-          onClose={() => {
-            setBookActions(false);
-          }}
-        >
-          <Button
-            disabled={!activity.canConfirm || busy}
-            onClick={() => {
-              activity.confirm();
-              setBookActions(false);
-            }}
-          >
-            Отметить фрагмент прочитанным
-          </Button>
-        </Dialog>
-      )}
       {footnote && (
         <Dialog
           open
@@ -838,12 +814,34 @@ export function ReaderScreen({
         <ReaderContents
           index={index}
           currentPath={location?.path}
+          currentChapter={location?.chapter}
+          {...(chapterPreview
+            ? {
+                onKeepPlace: () => {
+                  chapterOrigin.current = null;
+                  setChapterPreview(false);
+                  if (location) writer.current?.push(location);
+                  setPanel(null);
+                },
+              }
+            : {})}
           onClose={() => {
             setPanel(null);
           }}
           onNavigate={(target) => {
             setPanel(null);
-            command((reader) => reader.goTo(target));
+            command(async (reader) => {
+              const firstPreview = !chapterOrigin.current && location !== null;
+              if (firstPreview) chapterOrigin.current = location;
+              let moved = false;
+              try {
+                moved = await reader.goTo(target);
+                if (moved && chapterOrigin.current) setChapterPreview(true);
+                return moved;
+              } finally {
+                if (!moved && firstPreview) chapterOrigin.current = null;
+              }
+            });
           }}
         />
       )}

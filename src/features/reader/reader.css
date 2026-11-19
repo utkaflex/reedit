@@ -561,3 +561,103 @@
   max-height: min(9rem, 35dvh);
   border-top: 1px solid var(--color-border);
 }
+/* Equal paper margins keep pagination stable when the chrome is hidden. */
+.reader-screen {
+  --reader-chrome-height: max(48px, 3rem);
+  grid-template-rows: var(--reader-chrome-height) minmax(0, 1fr) var(
+      --reader-chrome-height
+    );
+}
+.reader-top {
+  min-height: 0;
+  padding-block: 0;
+  border: 0;
+}
+.reader-top .button,
+.reader-actions .button {
+  min-width: 44px;
+  min-height: 44px;
+}
+.reader-bottom,
+.reader-screen[data-speed-active='true'] .reader-bottom {
+  min-height: 0;
+  border: 0;
+  padding-block: 0;
+  background: transparent;
+  align-content: center;
+}
+.reader-footer-content {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.reader-footer-content .reader-progress-row {
+  grid-area: 1 / 1;
+  padding-bottom: 6px;
+}
+.reader-footer-content > progress {
+  grid-area: 1 / 1;
+  margin-bottom: 5px;
+  height: 2px;
+}
+.reader-footer-content .reader-actions {
+  grid-area: 1 / 2;
+  display: flex;
+  align-items: center;
+}
+.reader-gesture-hint {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  padding: 6px 10px;
+  border-radius: 8px;
+  color: var(--color-muted);
+  background: var(--color-surface);
+  font-size: 0.8125rem;
+  pointer-events: none;
+}
+.reader-screen .dialog--panel {
+  padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+}
+.reader-screen .dialog--panel .dialog__header {
+  margin-bottom: 8px;
+}
+.reader-settings .form-fieldset,
+.reader-settings.form-stack {
+  gap: 10px;
+}
+.reader-font-picker .segmented__option:first-child span {
+  font-family: var(--font-editorial);
+}
+.reader-font-picker .segmented__option:last-child span {
+  font-family: var(--font-ui);
+}
+.reader-size-control {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.reader-size-control .button {
+  padding-inline: 4px;
+}
+.reader-theme-picker .segmented__option span {
+  min-height: 44px;
+}
+.reader-settings .reader-range {
+  gap: 0;
+}
+.reader-toc .button {
+  margin-block: 0;
+  color: var(--color-text);
+  font-weight: 500;
+  padding: 6px 10px;
+}
+.reader-toc-notes > summary {
+  cursor: pointer;
+  min-height: 44px;
+  align-content: center;
+  padding-inline: 10px;
+}
+.reader-all-sections {
+  margin-top: 8px;
+}

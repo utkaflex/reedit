@@ -80,12 +80,11 @@ for (const width of [320, 390, 1440]) {
     await expect(page.frameLocator('iframe').locator('body')).toContainText(
       'Утром море было тихим',
     );
-    await page
-      .getByRole('button', { name: 'Следующая страница', exact: true })
-      .click();
-    await expect(
-      page.getByText('Позиция сохранена', { exact: true }),
-    ).toBeVisible();
+    await page.locator('.reader-screen').press('ArrowRight');
+    await expect(page.locator('.reader-screen')).toHaveAttribute(
+      'data-position-state',
+      'saved',
+    );
     await shot('reader');
     await compare('reader');
     const footer = page.locator('.reader-bottom');
@@ -132,9 +131,7 @@ for (const width of [320, 390, 1440]) {
         ['По одному слову', 'reader-words'],
         ['С подсветкой текста', 'reader-guided'],
       ] as const) {
-        await page
-          .getByRole('button', { name: 'Режимы чтения', exact: true })
-          .click();
+        await page.getByRole('button', { name: 'Режимы', exact: true }).click();
         await page.getByRole('button', { name: mode, exact: true }).click();
         const play = page.getByRole('button', {
           name: 'Продолжить',

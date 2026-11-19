@@ -155,20 +155,15 @@ test('время и слова трёх режимов сохраняются; �
     .click();
   await page.getByRole('button', { name: 'Читать файл stats.epub' }).click();
   const speedButton = page.getByRole('button', {
-    name: 'Режимы чтения',
+    name: 'Режимы',
     exact: true,
   });
   await expect(speedButton).toBeEnabled({ timeout: 20000 });
   expect((await totals(page)).words).toBe(0);
   await backgroundPause(page);
-  await page
-    .getByRole('button', { name: 'Следующая страница', exact: true })
-    .click();
-  await page
-    .getByRole('button', { name: 'Предыдущая страница', exact: true })
-    .click();
+  await page.locator('.reader-screen').press('ArrowRight');
+  await page.locator('.reader-screen').press('ArrowLeft');
   expect((await totals(page)).words).toBe(0);
-  await page.getByRole('button', { name: 'Действия книги' }).click();
   const confirm = page.getByRole('button', {
     name: 'Отметить фрагмент прочитанным',
     exact: true,

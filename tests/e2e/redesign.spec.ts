@@ -206,9 +206,7 @@ for (const width of [390, 1440]) {
       path: test.info().outputPath('reading.png'),
       scale: 'css',
     });
-    await page
-      .getByRole('button', { name: 'Режимы чтения', exact: true })
-      .click();
+    await page.getByRole('button', { name: 'Режимы', exact: true }).click();
     await page
       .getByRole('button', { name: 'По одному слову', exact: true })
       .click();

@@ -497,7 +497,11 @@ class EpubReaderSession implements ReaderSession {
     style.textContent +=
       'html,body,body p,body span,body div,body li,body blockquote,body h1,body h2,body h3,body h4 { -webkit-user-select:text !important; user-select:text !important; -webkit-touch-callout:default !important; }';
     style.textContent +=
-      'a[role="doc-noteref"], a[epub\\:type~="noteref"] { vertical-align:super; font-size:.76em !important; font-weight:700; text-decoration:underline; }';
+      'a[role="doc-noteref"], a[epub\\:type~="noteref"] { vertical-align:super; font-size:.76em !important; font-weight:700; text-decoration:underline; color:var(--reedit-note) !important; }';
+    contents.document.documentElement.style.setProperty(
+      '--reedit-note',
+      this.preferences.theme === 'dark' ? '#f4aa91' : '#8f3c2c',
+    );
     contents.document.documentElement.style.touchAction = 'pan-y pinch-zoom';
     contents.document.body.style.touchAction = 'pan-y pinch-zoom';
     for (const image of contents.document.querySelectorAll<
@@ -1224,7 +1228,7 @@ class EpubReaderSession implements ReaderSession {
   setPreferences(preferences: ReaderPreferences) {
     if (!validReaderPreferences(preferences))
       return Promise.reject(new Error('Некорректные настройки чтения'));
-    const cfi = this.lastConfirmed?.cfi;
+    const anchor = this.lastConfirmed;
     return this.command(
       async () => {
         const rebuild =
@@ -1239,11 +1243,13 @@ class EpubReaderSession implements ReaderSession {
           const { width, height } = this.measure();
           this.requireRendition().resize(width, height);
         }
-        await this.display(cfi);
+        await this.display(
+          anchor?.cursor ? await this.cfiForCursor(anchor.cursor) : anchor?.cfi,
+        );
       },
       false,
-      cfi,
-      this.lastConfirmed?.cursor,
+      undefined,
+      anchor?.cursor,
     );
   }
   private scheduleResize() {
@@ -1290,6 +1296,13 @@ class EpubReaderSession implements ReaderSession {
     window.visualViewport?.addEventListener('resize', this.viewportResize);
     this.motion.addEventListener('change', this.motionChanged);
   }
+  private isLegacyNote(anchor: Element, target: ReaderTarget): boolean {
+    return (
+      Boolean(target.fragment) &&
+      /^\[?\d+\]?$/u.test(anchor.textContent.trim()) &&
+      /(?:^|\/)(?:footnotes|endnotes|notes)\.x?html?$/iu.test(target.path)
+    );
+  }
   private async followLink(
     anchor: Element,
     target: ReaderTarget,
@@ -1304,7 +1317,8 @@ class EpubReaderSession implements ReaderSession {
           ''
         )
           .split(/\s+/)
-          .includes('noteref');
+          .includes('noteref') ||
+        this.isLegacyNote(anchor, target);
       const number = /^\[?\d+\]?$/.test(anchor.textContent.trim());
       if (explicit || number) {
         if (explicit) this.speedStop?.();
@@ -1323,6 +1337,35 @@ class EpubReaderSession implements ReaderSession {
                 .includes(type),
             );
           const noteBody = (semantic ?? note)?.cloneNode(true);
+          if (
+            (explicit || semantic || epubNote) &&
+            noteBody?.nodeType === 1 &&
+            note &&
+            /^h[1-6]$/u.test(note.localName)
+          ) {
+            const block = doc.createElement('div');
+            for (
+              let next = note.nextElementSibling;
+              next;
+              next = next.nextElementSibling
+            ) {
+              if (
+                /^h[1-6]$/u.test(next.localName) &&
+                next.localName <= note.localName
+              )
+                break;
+              block.append(next.cloneNode(true));
+            }
+            if (block.textContent.trim()) {
+              this.speedStop?.();
+              this.options.onFootnote(
+                Array.from(block.children, (element) =>
+                  element.textContent.trim(),
+                ).join('\n\n'),
+              );
+              return;
+            }
+          }
           if (noteBody?.nodeType === 1) {
             for (const block of (noteBody as Element).querySelectorAll(
               'p,li,h1,h2,h3,h4,h5,h6,br',
@@ -1343,15 +1386,25 @@ class EpubReaderSession implements ReaderSession {
   private listenToContent(contents: Contents): () => void {
     this.options.onSelection?.(null);
     const doc = contents.document;
-    for (const anchor of doc.querySelectorAll('a.fb2-a[href]')) {
-      const fragment = anchor.getAttribute('href')?.split('#')[1];
-      if (
+    const source = this.options.index.spine[contents.sectionIndex]?.path;
+    for (const anchor of doc.querySelectorAll('a[href]')) {
+      const href = anchor.getAttribute('href') ?? '';
+      const fragment = href.split('#')[1];
+      const fb2Note =
         fragment &&
+        anchor.classList.contains('fb2-a') &&
         this.options.fb2NoteReferences?.has(
           fragment + ':' + anchor.textContent.trim(),
-        )
-      )
-        anchor.setAttribute('role', 'doc-noteref');
+        );
+      if (fb2Note) anchor.setAttribute('role', 'doc-noteref');
+      else if (source && /^\[?\d+\]?$/u.test(anchor.textContent.trim())) {
+        try {
+          if (this.isLegacyNote(anchor, resolveReference(source, href)))
+            anchor.setAttribute('role', 'doc-noteref');
+        } catch {
+          /* Non-local links retain the normal link policy. */
+        }
+      }
     }
     const listeners = new AbortController();
     for (const name of ['pointerdown', 'keydown', 'wheel', 'touchmove'])
@@ -1406,6 +1459,79 @@ class EpubReaderSession implements ReaderSession {
             );
         });
     };
+    // Complete a deliberate vertical gesture at a section boundary.
+    const scrollEdge = (direction: number) => {
+      const viewport = this.options.host.querySelector('.epub-container');
+      if (
+        !viewport ||
+        this.speedStop ||
+        this.preferences.mode !== 'scroll' ||
+        contents.window.getSelection()?.toString()
+      )
+        return false;
+      return direction > 0
+        ? viewport.scrollTop + viewport.clientHeight >=
+            viewport.scrollHeight - 2
+        : viewport.scrollTop <= 2;
+    };
+    let edgeGesture: {
+      x: number;
+      y: number;
+      top: boolean;
+      bottom: boolean;
+    } | null = null;
+    doc.addEventListener(
+      'touchstart',
+      (event) => {
+        const touch = event.touches.length === 1 ? event.touches[0] : undefined;
+        edgeGesture = touch
+          ? {
+              x: touch.clientX,
+              y: touch.clientY,
+              top: scrollEdge(-1),
+              bottom: scrollEdge(1),
+            }
+          : null;
+      },
+      { passive: true, signal: listeners.signal },
+    );
+    doc.addEventListener(
+      'touchend',
+      (event) => {
+        const first = edgeGesture;
+        const last = event.changedTouches[0];
+        edgeGesture = null;
+        if (!first || !last) return;
+        const dy = first.y - last.clientY;
+        if (
+          Math.abs(dy) < 48 ||
+          Math.abs(dy) < Math.abs(first.x - last.clientX) * 1.5
+        )
+          return;
+        if ((dy > 0 ? first.bottom : first.top) && scrollEdge(dy))
+          perform(dy > 0 ? 'next' : 'previous');
+      },
+      { passive: true, signal: listeners.signal },
+    );
+    doc.addEventListener(
+      'touchcancel',
+      () => {
+        edgeGesture = null;
+      },
+      { signal: listeners.signal },
+    );
+    let lastWheel = -Infinity;
+    doc.addEventListener(
+      'wheel',
+      (event) => {
+        const now = performance.now();
+        const fresh = now - lastWheel > 200;
+        lastWheel = now;
+        if (fresh && Math.abs(event.deltaY) >= 20 && scrollEdge(event.deltaY))
+          perform(event.deltaY > 0 ? 'next' : 'previous');
+      },
+      { passive: true, signal: listeners.signal },
+    );
     doc.addEventListener(
       'pointerdown',
       (event) => {

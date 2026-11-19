@@ -187,13 +187,12 @@ test('страницы: мобильное открытие, перелисты�
     page.locator('[data-testid="reader-host"] iframe'),
   ).toHaveAttribute('sandbox', 'allow-same-origin');
   const first = await position(page);
-  await page
-    .getByRole('button', { name: 'Следующая страница', exact: true })
-    .click();
+  await page.locator('.reader-screen').press('ArrowRight');
   await expect.poll(() => position(page)).not.toBe(first);
-  await expect(
-    page.getByText('Позиция сохранена', { exact: true }),
-  ).toBeVisible();
+  await expect(page.locator('.reader-screen')).toHaveAttribute(
+    'data-position-state',
+    'saved',
+  );
   const saved = await position(page);
   await page.screenshot({
     path: test.info().outputPath('reader-page.png'),
@@ -213,7 +212,7 @@ test('страницы: мобильное открытие, перелисты�
     .getByRole('button', { name: 'Читать файл reader.epub', exact: true })
     .click();
   await expect(
-    page.getByRole('button', { name: 'Следующая страница', exact: true }),
+    page.getByRole('button', { name: 'Оформление чтения' }),
   ).toBeEnabled({ timeout: 20000 });
   await expect.poll(() => position(page)).toBe(saved);
   expect(
@@ -229,18 +228,23 @@ test('вся книга: последовательный spine, неполно�
   test.setTimeout(120000);
   await page.setViewportSize({ width: 390, height: 844 });
   await openBook(page);
-  const next = page.getByRole('button', {
-    name: 'Следующая страница',
-    exact: true,
-  });
+  const next = page.getByRole('button', { name: 'Оформление чтения' });
   const chapters = new Set<string>();
   let turns = 0;
   while ((await next.isEnabled()) && turns < 100) {
     const before = await position(page);
-    await next.click();
-    await expect(
-      page.getByText('Позиция сохранена', { exact: true }),
-    ).toBeVisible();
+    await page.locator('.reader-screen').press('ArrowRight');
+    await expect(page.locator('.reader-screen')).toHaveAttribute(
+      'data-position-state',
+      'saved',
+    );
+    await expect(next).toBeEnabled();
+    if (
+      (await position(page)) === before &&
+      (await page.locator('.reader-screen').getAttribute('data-at-end')) ===
+        'true'
+    )
+      break;
     await expect.poll(() => position(page)).not.toBe(before);
     chapters.add(await page.locator('.reader-chapter').innerText());
     turns++;
@@ -248,7 +252,10 @@ test('вся книга: последовательный spine, неполно�
   expect(turns).toBeGreaterThan(5);
   expect(turns).toBeLessThan(100);
   expect([...chapters].some((title) => title.includes('2'))).toBe(true);
-  await expect(next).toBeDisabled();
+  await expect(page.locator('.reader-screen')).toHaveAttribute(
+    'data-at-end',
+    'true',
+  );
   // Reaching the final screen does not imply traversing every character on it.
   const progress = Number(
     await page.getByRole('progressbar').getAttribute('value'),
@@ -257,10 +264,11 @@ test('вся книга: последовательный spine, неполно�
   expect(progress).toBeLessThan(1);
   const frame = page.frameLocator('[data-testid="reader-host"] iframe');
   await expect(frame.locator('body')).toContainText('Конец всей книги.');
-  await page
-    .getByRole('button', { name: 'Предыдущая страница', exact: true })
-    .click();
-  await expect(next).toBeEnabled();
+  await page.locator('.reader-screen').press('ArrowLeft');
+  await expect(page.locator('.reader-screen')).toHaveAttribute(
+    'data-at-end',
+    'false',
+  );
 });
 
 test('оформление, поворот экрана, прокрутка и переходы по разделам', async ({
@@ -269,20 +277,19 @@ test('оформление, поворот экрана, прокрутка и �
   test.setTimeout(90000);
   await page.setViewportSize({ width: 320, height: 740 });
   await openBook(page);
-  await page
-    .getByRole('button', { name: 'Следующая страница', exact: true })
-    .click();
-  await expect(
-    page.getByText('Позиция сохранена', { exact: true }),
-  ).toBeVisible();
+  const initial = await position(page);
+  await page.locator('.reader-screen').press('ArrowRight');
+  await expect.poll(() => position(page)).not.toBe(initial);
+  await expect(page.locator('.reader-screen')).toHaveAttribute(
+    'data-position-state',
+    'saved',
+  );
   const saved = await position(page);
   await page.getByRole('button', { name: 'Оформление чтения' }).click();
   await page.getByRole('radio', { name: 'Сепия', exact: true }).check();
-  await page.getByLabel('Шрифт чтения', { exact: true }).selectOption('sans');
-  await page
-    .getByRole('slider', { name: 'Размер шрифта', exact: true })
-    .fill('24');
-  await page.getByText('Интервалы и другие настройки', { exact: true }).click();
+  await page.getByRole('radio', { name: 'Системный' }).check();
+  for (let index = 0; index < 4; index++)
+    await page.getByRole('button', { name: 'Увеличить шрифт' }).click();
   await page.getByRole('slider', { name: 'Поля', exact: true }).fill('32');
   await page
     .getByRole('slider', { name: 'Межстрочный интервал', exact: true })
@@ -298,9 +305,10 @@ test('оформление, поворот экрана, прокрутка и �
   await expect.poll(() => position(page)).toBe(saved);
   await expect(page.locator('iframe')).toHaveCount(1);
   await page.setViewportSize({ width: 740, height: 320 });
-  await expect(
-    page.getByText('Позиция сохранена', { exact: true }),
-  ).toBeVisible();
+  await expect(page.locator('.reader-screen')).toHaveAttribute(
+    'data-position-state',
+    'saved',
+  );
   await expect.poll(() => position(page)).toBe(saved);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Оформление чтения' }).click();
@@ -308,7 +316,7 @@ test('оформление, поворот экрана, прокрутка и �
   await page.getByRole('button', { name: 'Применить оформление' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(
-    page.getByRole('button', { name: 'Следующий раздел', exact: true }),
+    page.getByRole('button', { name: 'Оформление чтения' }),
   ).toBeEnabled();
   const beforeScroll = await position(page);
   await page.locator('.reader-host .epub-container').evaluate((element) => {
@@ -324,10 +332,10 @@ test('оформление, поворот экрана, прокрутка и �
   await expect(page.frameLocator('iframe').locator('body')).toContainText(
     'Середина без оглавления.',
   );
-  await page
-    .getByRole('button', { name: 'Следующий раздел', exact: true })
-    .click();
+  await page.locator('.reader-screen').press('ArrowRight');
   await expect(page.locator('.reader-chapter')).toContainText('Раздел 3');
+  await page.getByRole('button', { name: 'Оглавление' }).click();
+  await page.getByRole('button', { name: 'Читать отсюда' }).click();
   await page.getByRole('button', { name: 'Закрыть книгу' }).click();
   await expect(page).toHaveURL(/#\/library$/);
   await page.reload();
@@ -339,7 +347,7 @@ test('оформление, поворот экрана, прокрутка и �
     .getByRole('button', { name: 'Читать файл reader.epub', exact: true })
     .click();
   await expect(
-    page.getByRole('button', { name: 'Предыдущий раздел', exact: true }),
+    page.getByRole('button', { name: 'Оформление чтения' }),
   ).toBeEnabled({ timeout: 20000 });
   await expect(page.locator('.reader-screen')).toHaveAttribute(
     'data-reader-theme',
@@ -422,12 +430,24 @@ test('нативные сенсорные жесты: один свайп — о
     touchPoints: [],
   });
   await expect.poll(() => position(page)).not.toBe(initial);
-  await expect(
-    page.getByText('Позиция сохранена', { exact: true }),
-  ).toBeVisible();
-  await page
-    .getByRole('button', { name: 'Предыдущая страница', exact: true })
-    .click();
+  await expect(page.locator('.reader-screen')).toHaveAttribute(
+    'data-position-state',
+    'saved',
+  );
+  await expect(page.getByRole('button', { name: 'Режимы' })).toBeEnabled();
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x: box.x + 100, y }],
+  });
+  for (const x of [130, 170, 220, 280])
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: box.x + x, y }],
+    });
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
+    touchPoints: [],
+  });
   await expect.poll(() => position(page)).toBe(initial);
   await page.touchscreen.tap(box.x + box.width / 2, box.y + 100);
   await expect(page.locator('.reader-top')).toBeHidden();
@@ -503,9 +523,7 @@ test('отказ записи позиции сохраняет прежнее �
       { once: true },
     );
   });
-  await page
-    .getByRole('button', { name: 'Следующая страница', exact: true })
-    .click();
+  await page.locator('.reader-screen').press('ArrowRight');
   await expect(
     page.getByRole('region', { name: 'Сообщение читалки' }).getByRole('alert'),
   ).toContainText('Недостаточно места');
@@ -519,9 +537,10 @@ test('отказ записи позиции сохраняет прежнее �
     window.dispatchEvent(new Event('restore-reader-writes')),
   );
   await page.getByRole('button', { name: 'Повторить сохранение' }).click();
-  await expect(
-    page.getByText('Позиция сохранена', { exact: true }),
-  ).toBeVisible();
+  await expect(page.locator('.reader-screen')).toHaveAttribute(
+    'data-position-state',
+    'saved',
+  );
   await expect.poll(() => position(page)).not.toBe(initial);
 });
 
