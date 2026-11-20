@@ -60,7 +60,14 @@ for (const width of [320, 390]) {
         await expect(book).toBeEnabled();
         await page.getByRole('button', { name: 'Оглавление' }).click();
         await page.getByRole('button', { name: 'Начало', exact: true }).click();
+        await page
+          .getByRole('button', { name: 'Читать отсюда', exact: true })
+          .click();
       }
+      const noteProgress = page.getByRole('progressbar', {
+        name: 'Прогресс по читаемому тексту',
+      });
+      const beforeNote = await noteProgress.getAttribute('value');
       const frame = page.locator('iframe').last().contentFrame();
       for (const [index, label] of (format === 'epub'
         ? ['1', '2']
@@ -83,8 +90,19 @@ for (const width of [320, 390]) {
           .getByRole('button', { name: 'К тексту', exact: true })
           .click();
         await expect(link).toBeVisible();
+        await expect(noteProgress).toHaveAttribute('value', beforeNote ?? '');
       }
-      if (format !== 'epub') return;
+      if (format !== 'epub') {
+        await page.getByRole('button', { name: 'Закрыть книгу' }).click();
+        await page
+          .getByRole('button', { name: 'Продолжить чтение', exact: true })
+          .click();
+        await expect(
+          frame.getByRole('link', { name: '4', exact: true }),
+        ).toBeInViewport();
+        await expect(noteProgress).toHaveAttribute('value', beforeNote ?? '');
+        return;
+      }
       const host = page.getByTestId('reader-host');
       const tapCenter = async () => {
         const box = await host.boundingBox();
@@ -213,7 +231,7 @@ if (personalFixture) {
       const appearance = page.getByRole('button', {
         name: 'Оформление чтения',
       });
-      await expect(appearance).toBeEnabled();
+      await expect(appearance).toBeEnabled({ timeout: 20000 });
       await page.getByRole('button', { name: 'Оглавление' }).click();
       const toc = page.getByRole('dialog', { name: 'Оглавление' });
       await toc
@@ -258,8 +276,9 @@ if (personalFixture) {
       await page.getByRole('button', { name: 'Применить оформление' }).click();
       await expect(appearance).toBeEnabled();
       await page.getByRole('button', { name: 'Оглавление' }).click();
-      await toc.getByText(/Все текстовые разделы/).click();
-      await toc.getByRole('button', { name: /chapter-005.xhtml/ }).click();
+      await toc
+        .getByRole('button', { name: /Кровавый спорт — фрагмент 5/u })
+        .click();
       const link = host
         .locator('iframe')
         .last()

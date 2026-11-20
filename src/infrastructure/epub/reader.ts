@@ -25,6 +25,15 @@ import {
 } from '../../domain/reader';
 import { ReaderNavigationGate } from '../../services/reader-navigation';
 import { resolveReference } from './xml';
+import {
+  explicitNoteLink,
+  missingLegacyNote,
+  noteDestination,
+  noteText,
+  numberLink,
+  reciprocalNote,
+  semanticNote,
+} from './footnotes';
 import { observeNativeSelection } from './native-selection';
 import {
   buildDocumentTextIndex,
@@ -601,7 +610,8 @@ class EpubReaderSession implements ReaderSession {
         /* A section-level label remains available when an anchor is outside the mounted document. */
       }
     }
-    return title || `Раздел ${String(location.start.index + 1)}`;
+    if (title.trim() && !/^Раздел\s+\d+$/iu.test(title.trim())) return title;
+    return content?.document.querySelector('h1,h2')?.textContent.trim() ?? '';
   }
   private publish(
     location: Location,
@@ -1339,93 +1349,72 @@ class EpubReaderSession implements ReaderSession {
     window.visualViewport?.addEventListener('resize', this.viewportResize);
     this.motion.addEventListener('change', this.motionChanged);
   }
-  private isLegacyNote(anchor: Element, target: ReaderTarget): boolean {
-    return (
-      Boolean(target.fragment) &&
-      /^\[?\d+\]?$/u.test(anchor.textContent.trim()) &&
-      /(?:^|\/)(?:footnotes|endnotes|notes)\.x?html?$/iu.test(target.path)
-    );
+  private noteLink(
+    anchor: Element,
+    target: ReaderTarget,
+    source: string,
+  ): boolean {
+    if (explicitNoteLink(anchor)) return true;
+    if (!target.fragment || !numberLink(anchor)) return false;
+    if (
+      anchor.classList.contains('fb2-a') &&
+      this.options.fb2NoteReferences?.has(
+        target.fragment + ':' + anchor.textContent.trim(),
+      )
+    )
+      return true;
+    if (/(?:^|\/)(?:footnotes|endnotes|notes)\.x?html?$/iu.test(target.path))
+      return true;
+    if (target.path !== source) return false;
+    const destination = noteDestination(anchor.ownerDocument, target.fragment);
+    return destination
+      ? Boolean(
+          semanticNote(destination) ??
+          reciprocalNote(anchor, destination, source),
+        )
+      : missingLegacyNote(anchor, target.fragment);
   }
   private async followLink(
     anchor: Element,
     target: ReaderTarget,
     contents: Contents,
   ): Promise<void> {
-    if (this.options.onFootnote && target.fragment && this.book) {
-      const explicit =
-        anchor.getAttribute('role') === 'doc-noteref' ||
-        (
-          anchor.getAttributeNS('http://www.idpf.org/2007/ops', 'type') ??
-          anchor.getAttribute('epub:type') ??
-          ''
-        )
-          .split(/\s+/)
-          .includes('noteref') ||
-        this.isLegacyNote(anchor, target);
-      const number = /^\[?\d+\]?$/.test(anchor.textContent.trim());
-      if (explicit || number) {
-        if (explicit) this.speedStop?.();
-        const doc: unknown = await this.book.load('/' + target.path);
-        if (
-          this.disposed ||
-          this.contentFor(contents.sectionIndex) !== contents
-        )
-          return;
-        if (isDocument(doc)) {
-          const note = doc.getElementById(target.fragment);
-          const semantic = note?.closest(
-            '[role="doc-footnote"],[role="doc-endnote"]',
-          );
-          const epubNote =
-            note &&
-            ['footnote', 'endnote', 'rearnote'].some((type) =>
-              (note.getAttribute('epub:type') ?? '')
-                .split(/\s+/)
-                .includes(type),
-            );
-          const noteBody = (semantic ?? note)?.cloneNode(true);
-          if (
-            (explicit || semantic || epubNote) &&
-            noteBody?.nodeType === 1 &&
-            note &&
-            /^h[1-6]$/u.test(note.localName)
-          ) {
-            const block = doc.createElement('div');
-            for (
-              let next = note.nextElementSibling;
-              next;
-              next = next.nextElementSibling
-            ) {
-              if (
-                /^h[1-6]$/u.test(next.localName) &&
-                next.localName <= note.localName
-              )
-                break;
-              block.append(next.cloneNode(true));
-            }
-            if (block.textContent.trim()) {
-              this.speedStop?.();
-              this.options.onFootnote(
-                Array.from(block.children, (element) =>
-                  element.textContent.trim(),
-                ).join('\n\n'),
-              );
-              return;
-            }
-          }
-          if (noteBody?.nodeType === 1) {
-            for (const block of (noteBody as Element).querySelectorAll(
-              'p,li,h1,h2,h3,h4,h5,h6,br',
-            ))
-              block.after(doc.createTextNode('\n'));
-          }
-          const text = noteBody?.textContent?.trim();
-          if (text && (explicit || semantic || epubNote)) {
-            this.speedStop?.();
-            this.options.onFootnote(text);
-            return;
-          }
-        }
+    const source = this.options.index.spine[contents.sectionIndex]?.path;
+    if (explicitNoteLink(anchor) && !target.fragment) {
+      this.speedStop?.();
+      cancelAnimationFrame(this.centerFrame);
+      this.options.onMissingFootnote?.();
+      return;
+    }
+    if (
+      source &&
+      target.fragment &&
+      (explicitNoteLink(anchor) || numberLink(anchor))
+    ) {
+      const known = this.noteLink(anchor, target, source);
+      const doc: unknown =
+        source === target.path
+          ? contents.document
+          : await this.book?.load('/' + target.path).catch(() => null);
+      if (this.disposed || this.contentFor(contents.sectionIndex) !== contents)
+        return;
+      const destination = isDocument(doc)
+        ? noteDestination(doc, target.fragment)
+        : null;
+      const note =
+        destination &&
+        (semanticNote(destination) ??
+          (source === target.path
+            ? reciprocalNote(anchor, destination, source)
+            : null) ??
+          (known ? destination : null));
+      if (known || note) {
+        this.speedStop?.();
+        cancelAnimationFrame(this.centerFrame);
+        const text = destination && note ? noteText(note, destination) : '';
+        if (text) this.options.onFootnote?.(text);
+        else this.options.onMissingFootnote?.();
+        return;
       }
     }
     if (this.speedStop) return;
@@ -1436,19 +1425,14 @@ class EpubReaderSession implements ReaderSession {
   private listenToContent(contents: Contents): () => void {
     const doc = contents.document;
     const source = this.options.index.spine[contents.sectionIndex]?.path;
-    for (const anchor of doc.querySelectorAll('a[href]')) {
-      const href = anchor.getAttribute('href') ?? '';
-      const fragment = href.split('#')[1];
-      const fb2Note =
-        fragment &&
-        anchor.classList.contains('fb2-a') &&
-        this.options.fb2NoteReferences?.has(
-          fragment + ':' + anchor.textContent.trim(),
-        );
-      if (fb2Note) anchor.setAttribute('role', 'doc-noteref');
-      else if (source && /^\[?\d+\]?$/u.test(anchor.textContent.trim())) {
+    if (source) {
+      for (const anchor of doc.querySelectorAll('a[href]')) {
         try {
-          if (this.isLegacyNote(anchor, resolveReference(source, href)))
+          const target = resolveReference(
+            source,
+            anchor.getAttribute('href') ?? '',
+          );
+          if (this.noteLink(anchor, target, source))
             anchor.setAttribute('role', 'doc-noteref');
         } catch {
           /* Non-local links retain the normal link policy. */
@@ -1599,33 +1583,94 @@ class EpubReaderSession implements ReaderSession {
       },
       { signal: listeners.signal },
     );
+    const linkAt = (target: EventTarget | null) =>
+      target && 'nodeType' in target && target.nodeType === 1
+        ? (target as Element).closest('a[href]')
+        : null;
+    const activateLink = (anchor: Element) => {
+      if (!source) return;
+      try {
+        const resolved = resolveReference(
+          source,
+          anchor.getAttribute('href') ?? '',
+        );
+        void this.followLink(anchor, resolved, contents).catch(
+          (error: unknown) => {
+            this.options.onError(
+              error instanceof Error ? error.message : 'Ссылка недоступна',
+            );
+          },
+        );
+      } catch {
+        this.options.onError('Внешние ссылки в читалке отключены.');
+      }
+    };
+    let noteTap: {
+      anchor: Element;
+      x: number;
+      y: number;
+      time: number;
+    } | null = null;
+    let touchActivation: { anchor: Element; time: number } | null = null;
+    doc.addEventListener(
+      'touchstart',
+      (event) => {
+        const anchor = linkAt(event.target);
+        const touch = event.touches.length === 1 ? event.touches[0] : undefined;
+        noteTap =
+          anchor && touch && explicitNoteLink(anchor)
+            ? {
+                anchor,
+                x: touch.screenX,
+                y: touch.screenY,
+                time: performance.now(),
+              }
+            : null;
+      },
+      { passive: true, signal: listeners.signal },
+    );
+    doc.addEventListener(
+      'touchend',
+      (event) => {
+        const first = noteTap;
+        noteTap = null;
+        const last = event.changedTouches[0];
+        if (
+          !first ||
+          !last ||
+          event.touches.length ||
+          performance.now() - first.time > 420 ||
+          Math.hypot(last.screenX - first.x, last.screenY - first.y) > 12 ||
+          contents.window.getSelection()?.toString()
+        )
+          return;
+        event.preventDefault();
+        touchActivation = { anchor: first.anchor, time: performance.now() };
+        activateLink(first.anchor);
+      },
+      { passive: false, signal: listeners.signal },
+    );
+    doc.addEventListener(
+      'touchcancel',
+      () => {
+        noteTap = null;
+      },
+      { signal: listeners.signal },
+    );
     doc.addEventListener(
       'click',
       (event) => {
-        const target = event.target;
-        const element =
-          target && 'nodeType' in target && target.nodeType === 1
-            ? (target as Element)
-            : null;
-        const anchor = element?.closest('a');
+        const anchor = linkAt(event.target);
         if (!anchor) return;
         event.preventDefault();
         event.stopImmediatePropagation();
-        const href = anchor.getAttribute('href') ?? '';
-        try {
-          const path = this.options.index.spine[contents.sectionIndex]?.path;
-          if (!path) return;
-          const resolved = resolveReference(path, href);
-          void this.followLink(anchor, resolved, contents).catch(
-            (error: unknown) => {
-              this.options.onError(
-                error instanceof Error ? error.message : 'Ссылка недоступна',
-              );
-            },
-          );
-        } catch {
-          this.options.onError('Внешние ссылки в читалке отключены.');
-        }
+        if (
+          touchActivation?.anchor === anchor &&
+          performance.now() - touchActivation.time < 500 &&
+          event.detail !== 0
+        )
+          return;
+        activateLink(anchor);
       },
       { capture: true, signal: listeners.signal },
     );

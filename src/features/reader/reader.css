@@ -174,7 +174,7 @@
 }
 .reader-settings .segmented-field legend,
 .reader-settings .field__label,
-.reader-range {
+.reader-spacing {
   font-size: 14px;
   font-weight: 500;
 }
@@ -352,22 +352,6 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.reader-range {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-  font-weight: 550;
-}
-.reader-range input {
-  grid-column: 1/-1;
-  width: 100%;
-  height: 44px;
-  accent-color: var(--color-accent);
-}
-.reader-range output {
-  color: var(--color-muted);
-  font-weight: 400;
-}
 .reader-toc {
   padding: 0;
   list-style: none;
@@ -509,13 +493,34 @@
   inset: 0 0 0 auto !important;
   translate: none !important;
   margin: 0;
-  width: min(100%, 26rem);
+  width: min(calc(100% - 24px), 26rem);
   height: 100dvh;
   max-height: 100dvh !important;
   border-radius: 16px 0 0 16px;
   padding: max(16px, env(safe-area-inset-top)) 16px
     max(16px, env(safe-area-inset-bottom));
   animation: footnote-enter 160ms ease-out;
+  touch-action: pan-y;
+}
+.reader-footnote-status {
+  position: absolute;
+  z-index: 3;
+  inset-inline: max(
+    12px,
+    env(safe-area-inset-left),
+    env(safe-area-inset-right)
+  );
+  bottom: calc(var(--reader-chrome-height) + env(safe-area-inset-bottom) + 8px);
+  width: fit-content;
+  max-width: calc(100% - 24px);
+  margin-inline: auto;
+  padding: 8px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  color: var(--color-text);
+  background: var(--color-surface);
+  overflow-wrap: anywhere;
+  pointer-events: none;
 }
 .reader-footnote-text {
   white-space: pre-wrap;
@@ -622,8 +627,21 @@
 .reader-theme-picker .segmented__option span {
   min-height: 44px;
 }
-.reader-settings .reader-range {
-  gap: 0;
+.reader-spacing {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.reader-spacing .reader-size-control {
+  grid-template-columns: 44px minmax(52px, auto) 44px;
+}
+.reader-spacing .button {
+  min-height: 44px;
+}
+.reader-spacing output {
+  padding-inline: 4px;
+  font-weight: 400;
 }
 .reader-toc .button {
   margin-block: 0;

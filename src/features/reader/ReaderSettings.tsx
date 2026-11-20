@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useState } from 'react';
 import {
   defaultReaderPreferences,
   type ReaderPreferences,
@@ -6,6 +6,49 @@ import {
 import { Dialog } from '../../ui/Dialog';
 import { Button } from '../../ui/Button';
 import { SegmentedControl } from '../../ui/SegmentedControl';
+
+function ReaderSpacingControl({
+  label,
+  value,
+  canDecrease,
+  canIncrease,
+  onStep,
+}: {
+  label: string;
+  value: string;
+  canDecrease: boolean;
+  canIncrease: boolean;
+  onStep: (direction: -1 | 1) => void;
+}) {
+  return (
+    <div className="reader-spacing" role="group" aria-label={label}>
+      <span>{label}</span>
+      <div className="reader-size-control">
+        <Button
+          variant="secondary"
+          aria-label={`Уменьшить: ${label.toLocaleLowerCase('ru')}`}
+          disabled={!canDecrease}
+          onClick={() => {
+            onStep(-1);
+          }}
+        >
+          −
+        </Button>
+        <output>{value}</output>
+        <Button
+          variant="secondary"
+          aria-label={`Увеличить: ${label.toLocaleLowerCase('ru')}`}
+          disabled={!canIncrease}
+          onClick={() => {
+            onStep(1);
+          }}
+        >
+          +
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export function ReaderSettings({
   preferences,
@@ -21,7 +64,6 @@ export function ReaderSettings({
   const [draft, setDraft] = useState({ ...preferences });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const id = useId();
   return (
     <Dialog
       open
@@ -117,40 +159,40 @@ export function ReaderSettings({
               A+
             </Button>
           </div>
-          <label className="reader-range" htmlFor={`${id}-line`}>
-            Межстрочный интервал{' '}
-            <output>{draft.lineHeight.toLocaleString('ru')}</output>
-            <input
-              id={`${id}-line`}
-              aria-label="Межстрочный интервал"
-              type="range"
-              min="1.2"
-              max="2.2"
-              step="0.1"
-              value={draft.lineHeight}
-              onChange={(event) => {
-                setDraft({
-                  ...draft,
-                  lineHeight: Number(event.target.value),
-                });
-              }}
-            />
-          </label>
-          <label className="reader-range" htmlFor={`${id}-margin`}>
-            Поля <output>{draft.margin} px</output>
-            <input
-              id={`${id}-margin`}
-              aria-label="Поля"
-              type="range"
-              min="12"
-              max="48"
-              step="4"
-              value={draft.margin}
-              onChange={(event) => {
-                setDraft({ ...draft, margin: Number(event.target.value) });
-              }}
-            />
-          </label>
+          <ReaderSpacingControl
+            label="Межстрочный интервал"
+            value={draft.lineHeight.toLocaleString('ru')}
+            canDecrease={draft.lineHeight > 1.2}
+            canIncrease={draft.lineHeight < 2.2}
+            onStep={(direction) => {
+              setDraft((current) => ({
+                ...current,
+                lineHeight:
+                  Math.max(
+                    12,
+                    Math.min(
+                      22,
+                      Math.round(current.lineHeight * 10) + direction,
+                    ),
+                  ) / 10,
+              }));
+            }}
+          />
+          <ReaderSpacingControl
+            label="Поля"
+            value={`${String(draft.margin)} px`}
+            canDecrease={draft.margin > 12}
+            canIncrease={draft.margin < 48}
+            onStep={(direction) => {
+              setDraft((current) => ({
+                ...current,
+                margin: Math.max(
+                  12,
+                  Math.min(48, current.margin + direction * 4),
+                ),
+              }));
+            }}
+          />
           <SegmentedControl
             label="Выравнивание"
             value={draft.alignment}

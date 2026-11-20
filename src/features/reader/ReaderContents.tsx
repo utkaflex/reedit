@@ -1,6 +1,6 @@
 import type { EpubIndex } from '../../domain/model';
 import type { EpubNavItem } from '../../domain/epub';
-import type { ReaderTarget } from '../../domain/reader';
+import { flattenNavigation, type ReaderTarget } from '../../domain/reader';
 import { Dialog } from '../../ui/Dialog';
 import { Button } from '../../ui/Button';
 export function ReaderContents({
@@ -22,11 +22,14 @@ export function ReaderContents({
     /^(примечания|сноски|footnotes|endnotes|notes)(?:\s|$)/iu.test(
       item.label.trim(),
     );
-  const collect = (items: EpubNavItem[]): EpubNavItem[] =>
-    items.flatMap((item) => [item, ...collect(item.children)]);
-  const samePath = collect(index.navigation).filter(
-    (item) => item.path === currentPath,
+  const navigation = flattenNavigation(index.navigation);
+  const extraSections = index.sections.filter(
+    (section) =>
+      !navigation.some(
+        (item) => item.path === section.path && item.label.trim(),
+      ),
   );
+  const samePath = navigation.filter((item) => item.path === currentPath);
   const current =
     samePath.find((item) => item.label === currentChapter) ??
     samePath.find((item) => !item.fragment) ??
@@ -91,23 +94,26 @@ export function ReaderContents({
       }
     >
       {list(index.navigation)}
-      <details className="reader-all-sections">
-        <summary>Все текстовые разделы ({index.sections.length})</summary>
-        <ol className="reader-toc">
-          {index.sections.map((section, number) => (
-            <li key={`${String(section.spineIndex)}-${section.path}`}>
-              <Button
-                variant="quiet"
-                onClick={() => {
-                  onNavigate({ path: section.path });
-                }}
-              >
-                Раздел {number + 1} · {section.path.split('/').at(-1)}
-              </Button>
-            </li>
-          ))}
-        </ol>
-      </details>
+      {extraSections.length > 0 && (
+        <details className="reader-all-sections" open={navigation.length === 0}>
+          <summary>Разделы вне оглавления ({extraSections.length})</summary>
+          <ol className="reader-toc">
+            {extraSections.map((section) => (
+              <li key={`${String(section.spineIndex)}-${section.path}`}>
+                <Button
+                  variant="quiet"
+                  onClick={() => {
+                    onNavigate({ path: section.path });
+                  }}
+                >
+                  Раздел {section.spineIndex + 1} ·{' '}
+                  {section.path.split('/').at(-1)}
+                </Button>
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
     </Dialog>
   );
 }

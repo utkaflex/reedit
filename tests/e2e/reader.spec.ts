@@ -264,7 +264,8 @@ test('вся книга: последовательный spine, неполно�
   await page.setViewportSize({ width: 390, height: 844 });
   await openBook(page);
   const next = page.getByRole('button', { name: 'Оформление чтения' });
-  const chapters = new Set<string>();
+  const frame = page.frameLocator('[data-testid="reader-host"] iframe');
+  let sawUnlistedChapter = false;
   let turns = 0;
   while ((await next.isEnabled()) && turns < 100) {
     const before = await position(page);
@@ -281,12 +282,13 @@ test('вся книга: последовательный spine, неполно�
     )
       break;
     await expect.poll(() => position(page)).not.toBe(before);
-    chapters.add(await page.locator('.reader-chapter').innerText());
+    sawUnlistedChapter ||=
+      (await frame.getByText(/^Середина без оглавления\./u).count()) > 0;
     turns++;
   }
   expect(turns).toBeGreaterThan(5);
   expect(turns).toBeLessThan(100);
-  expect([...chapters].some((title) => title.includes('2'))).toBe(true);
+  expect(sawUnlistedChapter).toBe(true);
   await expect(page.locator('.reader-screen')).toHaveAttribute(
     'data-at-end',
     'true',
@@ -297,7 +299,6 @@ test('вся книга: последовательный spine, неполно�
   );
   expect(progress).toBeGreaterThan(0.5);
   expect(progress).toBeLessThan(1);
-  const frame = page.frameLocator('[data-testid="reader-host"] iframe');
   await expect(frame.locator('body')).toContainText('Конец всей книги.');
   await page.locator('.reader-screen').press('ArrowLeft');
   await expect(page.locator('.reader-screen')).toHaveAttribute(
@@ -325,10 +326,16 @@ test('оформление, поворот экрана, прокрутка и �
   await page.getByRole('radio', { name: 'Системный' }).check();
   for (let index = 0; index < 4; index++)
     await page.getByRole('button', { name: 'Увеличить шрифт' }).click();
-  await page.getByRole('slider', { name: 'Поля', exact: true }).fill('32');
-  await page
-    .getByRole('slider', { name: 'Межстрочный интервал', exact: true })
-    .fill('1.8');
+  const margins = page.getByRole('group', { name: 'Поля', exact: true });
+  await margins
+    .getByRole('button', { name: 'Увеличить: поля' })
+    .click({ clickCount: 2 });
+  await expect(margins.getByRole('status')).toHaveText('32 px');
+  const spacing = page.getByRole('group', { name: 'Межстрочный интервал' });
+  await spacing
+    .getByRole('button', { name: 'Увеличить: межстрочный интервал' })
+    .click();
+  await expect(spacing.getByRole('status')).toHaveText('1,8');
   await page.getByRole('radio', { name: 'По ширине', exact: true }).check();
   await page.getByLabel('Плавные переходы панелей').uncheck();
   await page.getByRole('button', { name: 'Применить оформление' }).click();
@@ -359,17 +366,23 @@ test('оформление, поворот экрана, прокрутка и �
   });
   await expect.poll(() => position(page)).not.toBe(beforeScroll);
   await page.getByRole('button', { name: 'Оглавление' }).click();
-  await page.getByText('Все текстовые разделы (3)', { exact: true }).click();
+  await page.getByText('Разделы вне оглавления (1)', { exact: true }).click();
   await page
     .getByRole('button', { name: 'Раздел 2 · middle.xhtml', exact: true })
     .click();
-  await expect(page.locator('.reader-chapter')).toContainText('Раздел 2');
+  await expect(page.locator('.reader-chapter')).toBeEmpty();
   await expect(
     page.locator('iframe').last().contentFrame().locator('body'),
   ).toContainText('Середина без оглавления.');
   await page.getByRole('button', { name: 'Оглавление' }).click();
   await page.getByRole('button', { name: 'Раздел 3', exact: true }).click();
-  await expect(page.locator('.reader-chapter')).toContainText('Раздел 3');
+  await expect(
+    page
+      .locator('iframe')
+      .last()
+      .contentFrame()
+      .getByText(/^Последний раздел\./u),
+  ).toBeInViewport();
   await page.getByRole('button', { name: 'Оглавление' }).click();
   await page.getByRole('button', { name: 'Читать отсюда' }).click();
   await page.getByRole('button', { name: 'Закрыть книгу' }).click();
@@ -389,7 +402,13 @@ test('оформление, поворот экрана, прокрутка и �
     'data-reader-theme',
     'sepia',
   );
-  await expect(page.locator('.reader-chapter')).toContainText('Раздел 3');
+  await expect(
+    page
+      .locator('iframe')
+      .last()
+      .contentFrame()
+      .getByText(/^Последний раздел\./u),
+  ).toBeInViewport();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,

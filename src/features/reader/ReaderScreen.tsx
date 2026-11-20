@@ -57,9 +57,39 @@ export function ReaderScreen({
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState<'saving' | 'saved' | 'error'>('saved');
   const [footnote, setFootnote] = useState<string | null>(null);
+  const [missingFootnote, setMissingFootnote] = useState(false);
+  const footnoteViewport = useRef<{
+    element: HTMLElement;
+    top: number;
+    left: number;
+  } | null>(null);
   const chapterOrigin = useRef<ReaderLocation | null>(null);
   const [chapterPreview, setChapterPreview] = useState(false);
   const noteSwipe = useRef<{ x: number; y: number } | null>(null);
+  const closeFootnote = () => {
+    const saved = footnoteViewport.current;
+    footnoteViewport.current = null;
+    noteSwipe.current = null;
+    setFootnote(null);
+    if (saved)
+      requestAnimationFrame(() => {
+        if (
+          saved.element.isConnected &&
+          (saved.element.scrollTop !== saved.top ||
+            saved.element.scrollLeft !== saved.left)
+        )
+          saved.element.scrollTo(saved.left, saved.top);
+      });
+  };
+  useEffect(() => {
+    if (!missingFootnote) return;
+    const timer = setTimeout(() => {
+      setMissingFootnote(false);
+    }, 3500);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [missingFootnote]);
   const [gestureHint, setGestureHint] = useState(false);
   const [controls, setControls] = useState(true);
   const [panel, setPanel] = useState<'settings' | 'contents' | null>(null);
@@ -290,7 +320,22 @@ export function ReaderScreen({
             }
           },
           onFootnote: (note) => {
-            if (!abort.signal.aborted) setFootnote(note);
+            if (abort.signal.aborted) return;
+            const element =
+              host.current?.querySelector<HTMLElement>('.epub-container');
+            if (element)
+              footnoteViewport.current = {
+                element,
+                top: element.scrollTop,
+                left: element.scrollLeft,
+              };
+            setMissingFootnote(false);
+            setFootnote(note);
+          },
+          onMissingFootnote: () => {
+            if (abort.signal.aborted) return;
+            setMissingFootnote(true);
+            setControls(true);
           },
           onInternalLink: (target, origin) => {
             if (!abort.signal.aborted) previewTarget(target, origin);
@@ -762,47 +807,41 @@ export function ReaderScreen({
           </>
         )}
       </footer>
+      {missingFootnote && (
+        <div className="reader-footnote-status" role="status">
+          Сноска недоступна
+        </div>
+      )}
       {footnote && (
         <Dialog
           open
           title="Примечание"
           className="reader-footnote"
-          onClose={() => {
-            setFootnote(null);
+          onClose={closeFootnote}
+          footer={<Button onClick={closeFootnote}>К тексту</Button>}
+          onTouchStart={(event) => {
+            const touch =
+              event.touches.length === 1 ? event.touches[0] : undefined;
+            noteSwipe.current = touch
+              ? { x: touch.clientX, y: touch.clientY }
+              : null;
           }}
-          footer={
-            <Button
-              onClick={() => {
-                setFootnote(null);
-              }}
-            >
-              К тексту
-            </Button>
-          }
+          onTouchEnd={(event) => {
+            const start = noteSwipe.current;
+            noteSwipe.current = null;
+            const touch = event.changedTouches[0];
+            if (
+              start &&
+              touch &&
+              touch.clientX - start.x > 60 &&
+              Math.abs(touch.clientY - start.y) < 40
+            ) {
+              event.preventDefault();
+              closeFootnote();
+            }
+          }}
         >
-          <div
-            className="reader-footnote-text"
-            onTouchStart={(event) => {
-              const touch = event.touches[0];
-              noteSwipe.current = touch
-                ? { x: touch.clientX, y: touch.clientY }
-                : null;
-            }}
-            onTouchEnd={(event) => {
-              const start = noteSwipe.current;
-              noteSwipe.current = null;
-              const touch = event.changedTouches[0];
-              if (
-                start &&
-                touch &&
-                touch.clientX - start.x > 60 &&
-                Math.abs(touch.clientY - start.y) < 40
-              )
-                setFootnote(null);
-            }}
-          >
-            {footnote}
-          </div>
+          <div className="reader-footnote-text">{footnote}</div>
         </Dialog>
       )}
       {speedChooser && (

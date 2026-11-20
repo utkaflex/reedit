@@ -1,4 +1,10 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  type ReactNode,
+  type TouchEventHandler,
+} from 'react';
 import { Button } from './Button';
 import { Icon } from './Icon';
 export interface DialogProps {
@@ -9,6 +15,8 @@ export interface DialogProps {
   presentation?: 'dialog' | 'panel';
   className?: string;
   footer?: ReactNode;
+  onTouchStart?: TouchEventHandler<HTMLDialogElement>;
+  onTouchEnd?: TouchEventHandler<HTMLDialogElement>;
 }
 export function Dialog({
   open,
@@ -18,6 +26,8 @@ export function Dialog({
   presentation = 'dialog',
   className = '',
   footer,
+  onTouchStart,
+  onTouchEnd,
 }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -63,6 +73,8 @@ export function Dialog({
       className={`dialog dialog--${presentation} ${className} ${footer ? 'dialog--with-footer' : ''}`}
       aria-labelledby={titleId}
       tabIndex={-1}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
       onKeyDown={(event) => {
         if (event.key !== 'Tab') return;
         const element = event.currentTarget;
