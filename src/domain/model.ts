@@ -88,6 +88,7 @@ export interface ReadingPosition extends RecordBase {
   cfi: string;
   progression: number;
   cursor?: ReadingCursor;
+  chapter?: string;
 }
 export interface TextAnchor {
   contentId: string;

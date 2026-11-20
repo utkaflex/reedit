@@ -68,7 +68,7 @@ test('FB2: оригинал, изображения, примечания и о�
     page.getByRole('img', { name: 'Встроенная обложка FB2' }),
   ).toBeVisible();
   await page
-    .getByRole('button', { name: 'Создать книгу и сохранить FB2' })
+    .getByRole('button', { name: 'Добавить в библиотеку' })
     .click();
   await page
     .getByRole('button', { name: 'Читать файл book.fb2', exact: true })
@@ -84,6 +84,7 @@ test('FB2: оригинал, изображения, примечания и о�
   await expect(
     page.getByRole('button', { name: 'Оформление чтения' }),
   ).toBeEnabled();
+  await page.getByRole('button', { name: 'Читать отсюда', exact: true }).click();
   await expect(page.frameLocator('iframe').locator('img')).toHaveCount(1);
   expect(
     await page
@@ -112,9 +113,7 @@ test('FB2: оригинал, изображения, примечания и о�
     .getByRole('list', { name: 'Книги библиотеки' })
     .getByRole('button', { name: /^Синтетическая книга FB2/ })
     .click();
-  await page
-    .getByRole('button', { name: 'Читать файл book.fb2', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Оформление чтения' }),
   ).toBeEnabled({ timeout: 20000 });
@@ -144,7 +143,7 @@ test('FB2: оригинал, изображения, примечания и о�
     buffer: Buffer.from(epub.bytes),
   });
   await page
-    .getByRole('button', { name: 'Создать книгу и сохранить EPUB' })
+    .getByRole('button', { name: 'Добавить в библиотеку' })
     .click();
   await page
     .getByRole('button', { name: 'Читать файл same.epub', exact: true })
@@ -181,7 +180,7 @@ test('повторный FB2 и опасный XML не создают лишн�
   await expect(
     page.getByRole('heading', { name: 'Этот файл уже в библиотеке' }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Читать сохранённую книгу' }).click();
+  await page.getByRole('button', { name: 'Открыть сохранённую книгу' }).click();
   await expect(
     page.getByRole('button', { name: 'Оформление чтения' }),
   ).toBeEnabled();

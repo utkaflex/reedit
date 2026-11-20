@@ -14,11 +14,7 @@ test('пустая коллекция остаётся доступна и им�
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Добавить', exact: true }).click();
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: /^Коллекции/ })
-    .click();
+  await page.getByRole('button', { name: 'Коллекции', exact: true }).click();
   await page
     .getByRole('button', { name: 'Создать коллекцию', exact: true })
     .click();
@@ -34,7 +30,7 @@ test('пустая коллекция остаётся доступна и им�
       exact: true,
     }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
+  await page.getByRole('button', { name: 'Все книги', exact: true }).click();
   await page.reload();
   await libraryAction(page, 'upload');
   const fixture = await makeEpubFixture();
@@ -62,7 +58,7 @@ test('пустая коллекция остаётся доступна и им�
   const box = await footer.boundingBox();
   expect(box && box.y + box.height).toBeLessThanOrEqual(361);
   await expect(
-    page.getByRole('button', { name: 'Создать книгу и сохранить EPUB' }),
+    page.getByRole('button', { name: 'Добавить в библиотеку' }),
   ).toBeVisible();
 });
 for (const width of [320, 390, 768, 1024, 1440]) {
@@ -71,7 +67,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/');
     await expect(
-      page.getByRole('button', { name: 'Добавить', exact: true }),
+      page.getByRole('button', { name: 'Загрузить EPUB или FB2', exact: true }),
     ).toBeEnabled();
     await expect(page.getByLabel('Поиск по библиотеке')).toHaveCount(0);
     await page.screenshot({
@@ -184,9 +180,7 @@ for (const width of [390, 1440]) {
       path: test.info().outputPath('import.png'),
       scale: 'css',
     });
-    await page
-      .getByRole('button', { name: 'Создать книгу и сохранить EPUB' })
-      .click();
+    await page.getByRole('button', { name: 'Добавить в библиотеку' }).click();
     await page.screenshot({
       path: test.info().outputPath('details.png'),
       scale: 'css',

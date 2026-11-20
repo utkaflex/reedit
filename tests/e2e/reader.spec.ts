@@ -30,7 +30,7 @@ async function openBook(page: Page, options: FixtureOptions = {}) {
     buffer: Buffer.from(fixture.bytes),
   });
   await page
-    .getByRole('button', { name: 'Создать книгу и сохранить EPUB' })
+    .getByRole('button', { name: 'Добавить в библиотеку' })
     .click();
   await page
     .getByRole('button', { name: 'Читать файл reader.epub', exact: true })
@@ -243,9 +243,7 @@ test('страницы: мобильное открытие, перелисты�
     .getByRole('list', { name: 'Книги библиотеки' })
     .getByRole('button', { name: /^Длинная книга для чтения/ })
     .click();
-  await page
-    .getByRole('button', { name: 'Читать файл reader.epub', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Оформление чтения' }),
   ).toBeEnabled({ timeout: 20000 });
@@ -392,9 +390,7 @@ test('оформление, поворот экрана, прокрутка и �
     .getByRole('list', { name: 'Книги библиотеки' })
     .getByRole('button', { name: /^Длинная книга для чтения/ })
     .click();
-  await page
-    .getByRole('button', { name: 'Читать файл reader.epub', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Оформление чтения' }),
   ).toBeEnabled({ timeout: 20000 });

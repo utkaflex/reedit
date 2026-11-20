@@ -83,7 +83,7 @@ export interface LocalStore {
   saveReaderPosition(
     input: Pick<
       ReadingPosition,
-      'readingId' | 'bookFileId' | 'cfi' | 'progression' | 'cursor'
+      'readingId' | 'bookFileId' | 'cfi' | 'progression' | 'cursor' | 'chapter'
     >,
   ): Promise<void>;
   findEpubByHash(hash: string): Promise<BookFileSummary | undefined>;

@@ -3,10 +3,16 @@ import {
   type Book,
   type Reading,
   type BookFileSummary,
+  type ReadingPosition,
   type Id,
 } from '../../domain/model';
 import { useState } from 'react';
-import { dateInput, statusLabels } from '../../domain/library';
+import {
+  dateInput,
+  readableEdition,
+  readingStatus,
+  statusLabels,
+} from '../../domain/library';
 import { useBlobUrl } from '../../ui/useBlobUrl';
 import { BookCard } from '../../ui/BookCard';
 import { BookCover } from '../../ui/BookCover';
@@ -22,16 +28,19 @@ export function LibraryCard({
   reading,
   onOpen,
   onRead,
+  hasPosition,
   list,
 }: {
   book: Book;
   reading: Reading | undefined;
   onOpen: () => void;
   onRead?: (() => void) | undefined;
+  hasPosition: boolean;
   list: boolean;
 }) {
   const url = useBlobUrl(book.cover);
   const cardCover = book.cover ? url : onlineBookCover(book);
+  const readLabel = hasPosition ? 'Продолжить' : 'Читать';
   return (
     <li
       data-book-id={book.id}
@@ -44,7 +53,7 @@ export function LibraryCard({
         onOpen={onOpen}
       />
       <p className="book-status">
-        {statusLabels[reading?.status ?? 'planned']}
+        {statusLabels[readingStatus(reading, hasPosition)]}
         {reading?.rating ? ` · ${reading.rating.toLocaleString('ru')} / 5` : ''}
       </p>
       <details className="book-card-menu">
@@ -67,9 +76,9 @@ export function LibraryCard({
           className="book-quick-read"
           variant="quiet"
           onClick={onRead}
-          aria-label={`Читать «${book.title}»`}
+          aria-label={`${readLabel} «${book.title}»`}
         >
-          Читать
+          {readLabel}
         </Button>
       )}
     </li>
@@ -79,6 +88,7 @@ export function BookView({
   book,
   readings,
   files,
+  positions,
   onClose,
   onEdit,
   onReading,
@@ -93,11 +103,12 @@ export function BookView({
   book: Book;
   readings: Reading[];
   files: BookFileSummary[];
+  positions: ReadingPosition[];
   onClose: () => void;
   onEdit: () => void;
   onReading: (reading: Reading) => void;
   onReread: () => void;
-  onImport: (format: 'epub' | 'fb2') => void;
+  onImport: () => void;
   onRead: (fileId: Id, readingId: Id | undefined) => void;
   onRemoveBook: () => void;
   onRemoveFile: (id: Id) => void;
@@ -111,10 +122,30 @@ export function BookView({
     .filter((reading) => reading.bookId === book.id)
     .sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id));
   const attached = files.filter((file) => file.bookId === book.id);
-  const readable = attached.find((file) => file.sha256);
   const [selectedReading, setSelectedReading] = useState<Id | null>(null);
   const currentReading =
     history.find((reading) => reading.id === selectedReading) ?? history[0];
+  const { file: readable, position } = readableEdition(
+    attached,
+    positions,
+    book.id,
+    currentReading?.id,
+  );
+  const statusFor = (reading: Reading) =>
+    readingStatus(
+      reading,
+      positions.some((saved) => saved.readingId === reading.id),
+    );
+  const readingHistory = history.filter(
+    (reading) => statusFor(reading) !== 'planned',
+  );
+  const plans = history.filter((reading) => statusFor(reading) === 'planned');
+  const readingLabel = (reading: Reading) => {
+    const index = readingHistory.indexOf(reading);
+    return index === -1
+      ? 'План чтения'
+      : `Прочтение ${String(readingHistory.length - index)}`;
+  };
   return (
     <Dialog
       open
@@ -127,7 +158,7 @@ export function BookView({
       <div className="form-stack book-detail">
         <div className="book-detail-hero">
           {(!preview || preview === failedPreview) && (
-            <BookCover title={book.title} authors={book.authors} />
+            <BookCover title={book.title} />
           )}
           {preview && preview !== failedPreview && (
             <img
@@ -140,9 +171,11 @@ export function BookView({
             />
           )}
           <div>
-            <p>{book.authors.join(', ') || 'Автор не указан'}</p>
+            <p className="book-detail-authors">
+              {book.authors.join(', ') || 'Автор не указан'}
+            </p>
             <p className="status-chip">
-              {statusLabels[currentReading?.status ?? 'planned']}
+              {statusLabels[readingStatus(currentReading, Boolean(position))]}
             </p>
           </div>
         </div>
@@ -159,41 +192,29 @@ export function BookView({
             · доступна онлайн
           </p>
         )}
-        {readable && (
+        <div className="book-primary-action">
           <Button
-            aria-label={`Читать файл ${readable.name}`}
+            aria-label={
+              readable && !position ? `Читать файл ${readable.name}` : undefined
+            }
             disabled={busy}
             onClick={() => {
-              onRead(readable.id, currentReading?.id);
+              if (readable) onRead(readable.id, currentReading?.id);
+              else onImport();
             }}
           >
-            Читать
+            {readable
+              ? position
+                ? 'Продолжить'
+                : 'Читать'
+              : 'Прикрепить файл'}
           </Button>
-        )}
-        {!readable && (
-          <div className="book-attach-actions">
-            <Button
-              variant="secondary"
-              disabled={busy}
-              onClick={() => {
-                onImport('epub');
-              }}
-            >
-              Прикрепить EPUB
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={busy}
-              onClick={() => {
-                onImport('fb2');
-              }}
-            >
-              Прикрепить FB2
-            </Button>
-          </div>
-        )}
+          {readable && attached.length > 1 && (
+            <p className="caption">{readable.name}</p>
+          )}
+        </div>
         <a
-          className="button button--secondary"
+          className="button button--quiet book-detail-link"
           href={`#/quotes?book=${book.id}`}
         >
           Цитаты и заметки
@@ -202,21 +223,20 @@ export function BookView({
           <div className="section-heading">
             <h3>История чтения</h3>
             <span className="caption">
-              {formatCount(history.length, [
+              {formatCount(readingHistory.length, [
                 'прочтение',
                 'прочтения',
                 'прочтений',
               ])}
             </span>
           </div>
-          {history.length === 0 && (
+          {readingHistory.length === 0 && (
             <p className="caption">Прочтений пока нет.</p>
           )}
-          {history.map((reading, index) => (
+          {readingHistory.map((reading, index) => (
             <article className="reading-entry form-stack" key={reading.id}>
               <h4>
-                Прочтение {history.length - index} ·{' '}
-                {statusLabels[reading.status]}
+                {readingLabel(reading)} · {statusLabels[statusFor(reading)]}
               </h4>
               <p className="caption">
                 {reading.startedAt === null
@@ -242,11 +262,37 @@ export function BookView({
                   onReading(reading);
                 }}
               >
-                Изменить прочтение {history.length - index}
+                Изменить прочтение {readingHistory.length - index}
               </Button>
             </article>
           ))}
-          <Button disabled={busy} onClick={onReread}>
+          {plans.map((reading, index) => (
+            <div key={reading.id} className="reading-entry">
+              {reading.rating !== null && (
+                <p>Оценка: {reading.rating.toLocaleString('ru')} / 5</p>
+              )}
+              {reading.review && (
+                <p className="preserve-text">{reading.review}</p>
+              )}
+              <Button
+                variant="quiet"
+                className="book-detail-link"
+                disabled={busy}
+                onClick={() => {
+                  onReading(reading);
+                }}
+              >
+                Изменить план чтения
+                {plans.length > 1 ? ` ${String(index + 1)}` : ''}
+              </Button>
+            </div>
+          ))}
+          <Button
+            variant="quiet"
+            className="book-detail-link"
+            disabled={busy}
+            onClick={onReread}
+          >
             Добавить прочтение
           </Button>
         </section>
@@ -290,10 +336,7 @@ export function BookView({
         <Button variant="quiet" disabled={busy} onClick={onEdit}>
           Редактировать книгу
         </Button>
-        <details
-          className="book-disclosure"
-          open={attached.length === 0 ? true : undefined}
-        >
+        <details className="book-disclosure">
           <summary>Файлы и издания</summary>
           <section className="form-stack" aria-label="Локальные файлы">
             {history.length > 1 && attached.some((file) => file.sha256) && (
@@ -306,38 +349,17 @@ export function BookView({
                   );
                 }}
               >
-                {history.length === 0 && (
-                  <option value="">Первое прочтение</option>
-                )}
-                {history.map((reading, number) => (
+                {history.map((reading) => (
                   <option key={reading.id} value={reading.id}>
-                    Прочтение {history.length - number} ·{' '}
-                    {statusLabels[reading.status]}
+                    {readingLabel(reading)} · {statusLabels[statusFor(reading)]}
                   </option>
                 ))}
               </SelectField>
             )}
             {readable && (
-              <>
-                <Button
-                  variant="secondary"
-                  disabled={busy}
-                  onClick={() => {
-                    onImport('epub');
-                  }}
-                >
-                  Прикрепить EPUB
-                </Button>
-                <Button
-                  variant="secondary"
-                  disabled={busy}
-                  onClick={() => {
-                    onImport('fb2');
-                  }}
-                >
-                  Прикрепить FB2
-                </Button>
-              </>
+              <Button variant="quiet" disabled={busy} onClick={onImport}>
+                Прикрепить другое издание
+              </Button>
             )}
             {attached.length === 0 ? (
               <p className="caption">
@@ -350,13 +372,20 @@ export function BookView({
                   <span>{file.name}</span>
                   {file.sha256 && file.id !== readable?.id ? (
                     <Button
+                      variant="quiet"
                       aria-label={`Читать файл ${file.name}`}
                       disabled={busy}
                       onClick={() => {
                         onRead(file.id, currentReading?.id);
                       }}
                     >
-                      Читать это издание
+                      {positions.some(
+                        (saved) =>
+                          saved.readingId === currentReading?.id &&
+                          saved.bookFileId === file.id,
+                      )
+                        ? 'Продолжить это издание'
+                        : 'Читать это издание'}
                     </Button>
                   ) : !file.sha256 ? (
                     <p className="caption">

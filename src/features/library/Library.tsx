@@ -5,6 +5,7 @@ import type { Book, Collection, Id, Reading } from '../../domain/model';
 import type { LibrarySnapshot, LocalStore } from '../../domain/repositories';
 import {
   latestReading,
+  readableEdition,
   selectBooks,
   statusLabels,
   type LibrarySort,
@@ -33,6 +34,22 @@ type Confirmation =
   | { type: 'book'; id: Id; title: string }
   | { type: 'file'; id: Id; bookId: Id; format: 'EPUB' | 'FB2' }
   | { type: 'collection'; id: Id; title: string };
+const sortLabels: Record<LibrarySort, string> = {
+  newest: 'Сначала новые',
+  title: 'По названию',
+  author: 'По автору',
+  rating: 'По оценке',
+};
+type LibraryFilters = {
+  status: string;
+  collectionId: string;
+  sort: LibrarySort;
+};
+const defaultFilters: LibraryFilters = {
+  status: 'all',
+  collectionId: 'all',
+  sort: 'newest',
+};
 export function Library({
   store,
   epubAdapter,
@@ -43,8 +60,11 @@ export function Library({
   catalogProviders: CatalogProvider[];
 }) {
   const [addOpen, setAddOpen] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [positions, setPositions] = useState<ReadingPosition[]>([]);
+  const [filters, setFilters] = useState(defaultFilters);
+  const [filterDraft, setFilterDraft] = useState<
+    (LibraryFilters & { view: 'grid' | 'list' }) | null
+  >(null);
+  const [storedPositions, setPositions] = useState<ReadingPosition[]>([]);
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [importTarget, setImportTarget] = useState<Id | 'new' | null>(null);
   const [importFormat, setImportFormat] = useState<'epub' | 'fb2' | 'auto'>(
@@ -54,14 +74,13 @@ export function Library({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(true);
   const [query, setQuery] = useState('');
-  const [status, setStatus] = useState('all');
-  const [collectionId, setCollectionId] = useState('all');
-  const [sort, setSort] = useState<LibrarySort>('newest');
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [selected, setSelected] = useState<Id | null>(null);
   const [bookEditor, setBookEditor] = useState<Book | 'new' | null>(null);
   const [readingEditor, setReadingEditor] = useState<Reading | null>(null);
   const [collectionsOpen, setCollectionsOpen] = useState(false);
+  const collectionHeading = useRef<HTMLHeadingElement>(null);
+  const [pickingCollectionBooks, setPickingCollectionBooks] = useState(false);
   const [collectionEditor, setCollectionEditor] = useState<
     Collection | 'new' | null
   >(null);
@@ -133,20 +152,95 @@ export function Library({
     }
   };
   const selectedBook = snapshot?.books.find((book) => book.id === selected);
+  const filesById = new Map(snapshot?.files.map((file) => [file.id, file]));
+  const readingsById = new Map(
+    snapshot?.readings.map((reading) => [reading.id, reading]),
+  );
+  const positions = storedPositions.filter((position) => {
+    const file =
+      position.bookFileId !== null
+        ? filesById.get(position.bookFileId)
+        : undefined;
+    return (
+      file?.sha256 &&
+      file.bookId === readingsById.get(position.readingId)?.bookId &&
+      (!position.cursor || position.cursor.sha256 === file.sha256)
+    );
+  });
+  const { status, collectionId, sort } = filters;
   const selectedCollection = snapshot?.collections.find(
     (collection) => collection.id === collectionId,
   );
+  const collectionIsEmpty =
+    selectedCollection !== undefined &&
+    !snapshot?.books.some((book) =>
+      selectedCollection.bookIds.includes(book.id),
+    );
+  const goToShelf = (focusCollection: boolean) => {
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      if (focusCollection)
+        collectionHeading.current?.focus({ preventScroll: true });
+    });
+  };
+  const openCollection = (id: Id) => {
+    setCollectionsOpen(false);
+    setQuery('');
+    setFilters({ ...defaultFilters, collectionId: id });
+    goToShelf(true);
+  };
   const books = snapshot
     ? selectBooks(snapshot.books, snapshot.readings, {
         query,
         status,
         sort,
+        startedReadingIds: new Set(
+          positions.map((position) => position.readingId),
+        ),
         collectionBookIds: selectedCollection?.bookIds ?? null,
       })
     : [];
+  const searching = query.trim().length > 0;
+  const statusLabel =
+    status === 'all' ? '' : statusLabels[status as Reading['status']];
+  const appliedFilters = [
+    statusLabel,
+    sort !== 'newest' ? sortLabels[sort] : '',
+  ].filter(Boolean);
+  const hasBooks = Boolean(snapshot?.books.length);
+  const collectionsButton = snapshot && (
+    <Button
+      className="library-collections-button"
+      variant="secondary"
+      aria-label="Коллекции"
+      onClick={() => {
+        setCollectionsOpen(true);
+      }}
+    >
+      <Icon name="library" />
+      <span>Коллекции</span>
+    </Button>
+  );
+  const filterButton = hasBooks && (
+    <Button
+      className="library-filter-button"
+      aria-label="Фильтры и сортировка"
+      variant="secondary"
+      onClick={() => {
+        setFilterDraft({
+          ...filters,
+          collectionId: selectedCollection?.id ?? 'all',
+          view,
+        });
+      }}
+    >
+      <Icon name="filter" />
+      <span>Фильтры</span>
+    </Button>
+  );
   return (
     <div
-      className={`library-feature${snapshot?.books.length === 0 ? ' library-feature--empty' : ''}`}
+      className={`library-feature${snapshot?.books.length === 0 ? ' library-feature--empty' : ''}${searching ? ' library-feature--searching' : ''}${searching && books.length === 0 ? ' library-feature--no-results' : ''}`}
     >
       <div className="library-actions">
         {snapshot && snapshot.books.length > 0 && (
@@ -160,33 +254,37 @@ export function Library({
             placeholder="Название, автор, жанр или ISBN"
           />
         )}
-        <Button
-          aria-label="Добавить"
-          disabled={!snapshot || Boolean(loadError)}
-          onClick={() => {
-            setAddOpen(true);
-          }}
-        >
-          <Icon name="plus" />
-          <span>Добавить</span>
-        </Button>
+        {searching && filterButton}
+        {(searching || !hasBooks) && collectionsButton}
+        {hasBooks && (
+          <Button
+            className="library-add-button"
+            aria-label="Добавить"
+            disabled={!snapshot || Boolean(loadError)}
+            onClick={() => {
+              setAddOpen(true);
+            }}
+          >
+            <Icon name="plus" />
+            <span>Добавить</span>
+          </Button>
+        )}
       </div>
       {error && !selectedBook && (
         <p className="error-text" role="alert">
           {error} Повторите действие.
         </p>
       )}
-      {snapshot && (
-        <div className="library-highlights">
-          <ContinueReading
-            snapshot={snapshot}
-            positions={positions}
-            onRead={(bookId, fileId, readingId) => {
-              window.location.hash = readerUrl({ bookId, fileId, readingId });
-            }}
-          />
-          <WeeklyReading store={store} />
-        </div>
+      {hasBooks && snapshot && (
+        <ContinueReading
+          snapshot={snapshot}
+          positions={positions}
+          store={store}
+          hidden={searching || Boolean(selectedCollection)}
+          onRead={(bookId, fileId, readingId) => {
+            window.location.hash = readerUrl({ bookId, fileId, readingId });
+          }}
+        />
       )}
       {loadError && (
         <div className="surface form-stack error-surface">
@@ -210,247 +308,149 @@ export function Library({
       {!snapshot && !loadError && <p role="status">Загружаем библиотеку…</p>}
       {snapshot && (
         <div className="library-shelf">
-          {snapshot.books.length > 0 && (
-            <>
-              <div className="library-toolbar">
-                <Button
-                  aria-label={`Фильтры и сортировка · ${status === 'all' ? 'Все книги' : statusLabels[status as Reading['status']]}`}
-                  variant="secondary"
-                  onClick={() => {
-                    setFiltersOpen(true);
-                  }}
-                >
-                  <Icon name="filter" />
-                  <span className="library-filter-label">
-                    {status === 'all'
-                      ? 'Все книги'
-                      : statusLabels[status as Reading['status']]}
-                  </span>
-                </Button>
-                {filtersOpen && (
-                  <Dialog
-                    open
-                    presentation="panel"
-                    title="Фильтры и сортировка"
-                    onClose={() => {
-                      setFiltersOpen(false);
-                    }}
-                    footer={
-                      <Button
-                        onClick={() => {
-                          setFiltersOpen(false);
-                        }}
-                      >
-                        Показать книги
-                      </Button>
-                    }
-                  >
-                    <div className="filter-fields">
-                      <div className="mobile-library-view">
-                        <SegmentedControl
-                          label="Вид библиотеки"
-                          value={view}
-                          options={[
-                            { value: 'grid', label: 'Сетка' },
-                            { value: 'list', label: 'Список' },
-                          ]}
-                          onChange={setView}
-                        />
-                      </div>
-                      <SelectField
-                        label="Статус книги"
-                        value={status}
-                        onChange={(event) => {
-                          setStatus(event.target.value);
-                        }}
-                      >
-                        <option value="all">Все статусы</option>
-                        {Object.entries(statusLabels).map(([value, label]) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        ))}
-                      </SelectField>
-                      <SelectField
-                        label="Коллекция"
-                        value={selectedCollection?.id ?? 'all'}
-                        onChange={(event) => {
-                          setCollectionId(event.target.value);
-                        }}
-                      >
-                        <option value="all">Все книги</option>
-                        {snapshot.collections.map((collection) => (
-                          <option key={collection.id} value={collection.id}>
-                            {collection.name}
-                          </option>
-                        ))}
-                      </SelectField>
-                      <SelectField
-                        label="Сортировка"
-                        value={sort}
-                        onChange={(event) => {
-                          const value = event.target.value;
-                          if (
-                            value === 'newest' ||
-                            value === 'title' ||
-                            value === 'author' ||
-                            value === 'rating'
-                          )
-                            setSort(value);
-                        }}
-                      >
-                        <option value="newest">Сначала новые</option>
-                        <option value="title">По названию</option>
-                        <option value="author">По автору</option>
-                        <option value="rating">По оценке</option>
-                      </SelectField>
-                    </div>
-                  </Dialog>
-                )}
-              </div>
-              <div
-                className="library-status-tabs"
-                role="group"
-                aria-label="Быстрые статусы"
+          {selectedCollection && (
+            <header className="collection-shelf-header">
+              <Button
+                variant="quiet"
+                onClick={() => {
+                  setFilters(defaultFilters);
+                  setQuery('');
+                  goToShelf(false);
+                }}
               >
-                {(
-                  [
-                    ['all', 'Все книги'],
-                    ['active', 'Читаю'],
-                    ['planned', 'Хочу прочитать'],
-                    ['finished', 'Прочитано'],
-                  ] as const
-                ).map(([value, label]) => (
-                  <Button
-                    key={value}
-                    variant="quiet"
-                    aria-pressed={status === value}
-                    onClick={() => {
-                      setStatus(value);
-                    }}
-                  >
-                    {label}
-                  </Button>
-                ))}
-              </div>
-              <div className="library-view-row">
-                <p role="status" className="caption">
-                  {formatCount(books.length, ['книга', 'книги', 'книг'])} в
-                  подборке
-                  {refreshing ? ' · Обновляем…' : ''}
-                </p>
-                <SegmentedControl
-                  label="Вид библиотеки"
-                  value={view}
-                  options={[
-                    { value: 'grid', label: 'Сетка' },
-                    { value: 'list', label: 'Список' },
-                  ]}
-                  onChange={setView}
-                />
-              </div>
-              {(query ||
-                status !== 'all' ||
-                selectedCollection ||
-                sort !== 'newest') && (
-                <div className="active-filters">
-                  <span>
-                    {[
-                      query,
-                      status !== 'all'
-                        ? statusLabels[status as Reading['status']]
-                        : '',
-                      selectedCollection?.name,
-                      sort !== 'newest' ? 'Своя сортировка' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </span>
+                <Icon name="back" /> Все книги
+              </Button>
+              <h2 tabIndex={-1} ref={collectionHeading}>
+                {selectedCollection.name}
+              </h2>
+            </header>
+          )}
+          {hasBooks && (!searching || appliedFilters.length > 0) && (
+            <div className="library-controls">
+              {!searching && filterButton}
+              {!searching && collectionsButton}
+              {appliedFilters.length > 0 && (
+                <div
+                  className="active-filters"
+                  role="group"
+                  aria-label="Активные фильтры"
+                >
+                  <span>{appliedFilters.join(' · ')}</span>
                   <Button
                     variant="quiet"
                     onClick={() => {
-                      setQuery('');
-                      setStatus('all');
-                      setCollectionId('all');
-                      setSort('newest');
+                      setFilters(defaultFilters);
+                      if (selectedCollection) goToShelf(false);
                     }}
                   >
-                    Сбросить
+                    Сбросить фильтры
                   </Button>
                 </div>
               )}
-            </>
+              {!searching && (
+                <div className="library-view-row">
+                  <p role="status" className="caption">
+                    {formatCount(books.length, ['книга', 'книги', 'книг'])} в
+                    подборке
+                    {refreshing ? ' · Обновляем…' : ''}
+                  </p>
+                  <SegmentedControl
+                    label="Вид библиотеки"
+                    value={view}
+                    options={[
+                      { value: 'grid', label: 'Сетка' },
+                      { value: 'list', label: 'Список' },
+                    ]}
+                    onChange={setView}
+                  />
+                </div>
+              )}
+            </div>
           )}
           {books.length > 0 ? (
             <ul
               className={view === 'grid' ? 'book-grid' : 'book-list'}
               aria-label="Книги библиотеки"
             >
-              {books.map((book) => (
-                <LibraryCard
-                  key={book.id}
-                  book={book}
-                  reading={latestReading(snapshot.readings, book.id)}
-                  onRead={
-                    snapshot.files.some(
-                      (file) => file.bookId === book.id && file.sha256,
-                    )
-                      ? () => {
-                          const file = snapshot.files.find(
-                            (file) => file.bookId === book.id && file.sha256,
-                          );
-                          if (!file) return;
-                          void perform(async () => {
-                            const reading =
-                              latestReading(snapshot.readings, book.id) ??
-                              (await store.addReading(book.id));
-                            window.location.hash = readerUrl({
-                              bookId: book.id,
-                              fileId: file.id,
-                              readingId: reading.id,
+              {books.map((book) => {
+                const reading = latestReading(snapshot.readings, book.id);
+                const { file, position } = readableEdition(
+                  snapshot.files,
+                  positions,
+                  book.id,
+                  reading?.id,
+                );
+                return (
+                  <LibraryCard
+                    key={book.id}
+                    book={book}
+                    reading={reading}
+                    hasPosition={Boolean(position)}
+                    onRead={
+                      file && !(selectedCollection && position)
+                        ? () => {
+                            void perform(async () => {
+                              const activeReading =
+                                reading ?? (await store.addReading(book.id));
+                              window.location.hash = readerUrl({
+                                bookId: book.id,
+                                fileId: file.id,
+                                readingId: activeReading.id,
+                              });
                             });
-                          });
-                        }
-                      : undefined
-                  }
-                  list={view === 'list'}
-                  onOpen={() => {
-                    setError(null);
-                    setSelected(book.id);
-                  }}
-                />
-              ))}
+                          }
+                        : undefined
+                    }
+                    list={view === 'list'}
+                    onOpen={() => {
+                      setError(null);
+                      setSelected(book.id);
+                    }}
+                  />
+                );
+              })}
             </ul>
+          ) : selectedCollection && collectionIsEmpty ? (
+            <div className="library-no-results collection-empty">
+              <p>В коллекции пока нет книг.</p>
+              <Button
+                onClick={() => {
+                  setPickingCollectionBooks(true);
+                  setCollectionEditor(selectedCollection);
+                }}
+              >
+                Добавить книги
+              </Button>
+            </div>
+          ) : hasBooks ? (
+            <div className="library-no-results">
+              <h2 aria-live="polite">Ничего не найдено</h2>
+              {searching && (
+                <Button
+                  variant="quiet"
+                  onClick={() => {
+                    setQuery('');
+                  }}
+                >
+                  Очистить поиск
+                </Button>
+              )}
+            </div>
           ) : (
             <div className="library-space">
-              <EmptyState
-                icon="book"
-                title={
-                  snapshot.books.length === 0
-                    ? 'Ваша первая книга'
-                    : selectedCollection?.bookIds.length === 0
-                      ? 'В коллекции пока нет книг'
-                      : 'Ничего не найдено'
-                }
-              >
-                <p>
-                  {snapshot.books.length === 0
-                    ? 'Любимые книги — всегда с вами.'
-                    : selectedCollection?.bookIds.length === 0
-                      ? 'Откройте коллекцию и выберите книги для неё.'
-                      : 'Попробуйте изменить поиск, статус или коллекцию.'}
-                </p>
-                {snapshot.books.length === 0 && (
-                  <div className="empty-library-actions">
-                    <Button
-                      onClick={() => {
-                        setImportFormat('auto');
-                        setImportTarget('new');
-                      }}
-                    >
-                      <Icon name="upload" />
-                      Загрузить книгу
-                    </Button>
+              <EmptyState icon="book" title="Ваша первая книга">
+                <p>Загрузите файл, чтобы начать читать.</p>
+                <div className="empty-library-actions">
+                  <Button
+                    onClick={() => {
+                      setImportFormat('auto');
+                      setImportTarget('new');
+                    }}
+                  >
+                    <Icon name="upload" />
+                    Загрузить EPUB или FB2
+                  </Button>
+                  <div className="empty-library-choice">
                     <Button
                       variant="quiet"
                       onClick={() => {
@@ -459,6 +459,9 @@ export function Library({
                     >
                       Найти в каталоге
                     </Button>
+                    <p className="caption">Карточка без файла</p>
+                  </div>
+                  <div className="empty-library-choice">
                     <Button
                       variant="quiet"
                       onClick={() => {
@@ -467,77 +470,107 @@ export function Library({
                     >
                       Добавить вручную
                     </Button>
+                    <p className="caption">Для бумажной книги</p>
                   </div>
-                )}
-                {snapshot.books.length > 0 && (
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setQuery('');
-                      setStatus('all');
-                      setCollectionId('all');
-                    }}
-                  >
-                    Сбросить поиск и фильтры
-                  </Button>
-                )}
+                </div>
               </EmptyState>
             </div>
           )}
         </div>
       )}
-      {snapshot && snapshot.books.length > 0 && (
-        <section
-          className="library-collections"
-          aria-label="Коллекции библиотеки"
-        >
-          <div className="section-heading">
-            <h2>Коллекции</h2>
+      {hasBooks && !searching && !selectedCollection && (
+        <WeeklyReading store={store} />
+      )}
+      {filterDraft && snapshot && (
+        <Dialog
+          open
+          presentation="panel"
+          title="Фильтры и сортировка"
+          onClose={() => {
+            setFilterDraft(null);
+          }}
+          footer={
             <Button
-              variant="quiet"
               onClick={() => {
-                setCollectionsOpen(true);
+                const { view: nextView, ...nextFilters } = filterDraft;
+                setFilters(nextFilters);
+                setView(nextView);
+                setFilterDraft(null);
+                if (nextFilters.collectionId !== collectionId)
+                  goToShelf(nextFilters.collectionId !== 'all');
               }}
             >
-              Управлять коллекциями
+              Показать книги
             </Button>
-          </div>
-          <div className="collection-tiles">
-            {snapshot.collections.map((collection) => (
-              <Button
-                key={collection.id}
-                variant="quiet"
-                aria-pressed={collectionId === collection.id}
-                onClick={() => {
-                  setCollectionId(collection.id);
+          }
+        >
+          <div className="filter-fields">
+            <div className="mobile-library-view">
+              <SegmentedControl
+                label="Вид библиотеки"
+                value={filterDraft.view}
+                options={[
+                  { value: 'grid', label: 'Сетка' },
+                  { value: 'list', label: 'Список' },
+                ]}
+                onChange={(view) => {
+                  setFilterDraft({ ...filterDraft, view });
                 }}
-              >
-                <Icon name="library" />
-                <span>
-                  <strong>{collection.name}</strong>
-                  <small>
-                    {formatCount(collection.bookIds.length, [
-                      'книга',
-                      'книги',
-                      'книг',
-                    ])}
-                  </small>
-                </span>
-                <Icon name="arrow" />
-              </Button>
-            ))}
-            {snapshot.collections.length === 0 && (
-              <Button
-                variant="quiet"
-                onClick={() => {
-                  setCollectionEditor('new');
-                }}
-              >
-                <Icon name="plus" /> Создать коллекцию
-              </Button>
-            )}
+              />
+            </div>
+            <SelectField
+              label="Статус книги"
+              value={filterDraft.status}
+              onChange={(event) => {
+                setFilterDraft({ ...filterDraft, status: event.target.value });
+              }}
+            >
+              <option value="all">Все статусы</option>
+              {Object.entries(statusLabels).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </SelectField>
+            <SelectField
+              label="Коллекция"
+              value={filterDraft.collectionId}
+              onChange={(event) => {
+                setFilterDraft({
+                  ...filterDraft,
+                  collectionId: event.target.value,
+                });
+              }}
+            >
+              <option value="all">Все книги</option>
+              {snapshot.collections.map((collection) => (
+                <option key={collection.id} value={collection.id}>
+                  {collection.name}
+                </option>
+              ))}
+            </SelectField>
+            <SelectField
+              label="Сортировка"
+              value={filterDraft.sort}
+              onChange={(event) => {
+                const value = event.target.value;
+                if (
+                  value === 'newest' ||
+                  value === 'title' ||
+                  value === 'author' ||
+                  value === 'rating'
+                )
+                  setFilterDraft({ ...filterDraft, sort: value });
+              }}
+            >
+              {Object.entries(sortLabels).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </SelectField>
           </div>
-        </section>
+        </Dialog>
       )}
       {addOpen && (
         <Dialog
@@ -589,19 +622,6 @@ export function Library({
                 <small>В том числе бумажную книгу</small>
               </span>
             </Button>
-            <Button
-              variant="quiet"
-              onClick={() => {
-                setAddOpen(false);
-                setCollectionsOpen(true);
-              }}
-            >
-              <Icon name="library" />
-              <span>
-                <strong>Коллекции</strong>
-                <small>Собрать книги по темам</small>
-              </span>
-            </Button>
           </div>
         </Dialog>
       )}
@@ -614,6 +634,7 @@ export function Library({
             book={selectedBook}
             readings={snapshot?.readings ?? []}
             files={snapshot?.files ?? []}
+            positions={positions}
             onClose={() => {
               const id = selectedBook.id;
               setSelected(null);
@@ -636,8 +657,8 @@ export function Library({
             onReread={() => {
               void perform(() => store.addReading(selectedBook.id));
             }}
-            onImport={(format) => {
-              setImportFormat(format);
+            onImport={() => {
+              setImportFormat('auto');
               setImportTarget(selectedBook.id);
               setSelected(null);
             }}
@@ -742,9 +763,6 @@ export function Library({
           }}
         >
           <div className="form-stack">
-            <p className="caption">
-              Коллекции ссылаются на книги, не создавая их копий.
-            </p>
             <Button
               onClick={() => {
                 setCollectionsOpen(false);
@@ -756,7 +774,15 @@ export function Library({
             {snapshot.collections.length === 0 && <p>Коллекций пока нет.</p>}
             {snapshot.collections.map((collection) => (
               <div className="collection-row form-stack" key={collection.id}>
-                <h3>{collection.name}</h3>
+                <Button
+                  variant="quiet"
+                  className="collection-open"
+                  onClick={() => {
+                    openCollection(collection.id);
+                  }}
+                >
+                  {collection.name}
+                </Button>
                 <p className="caption">
                   {formatCount(collection.bookIds.length, [
                     'книга',
@@ -798,14 +824,17 @@ export function Library({
           collection={collectionEditor === 'new' ? undefined : collectionEditor}
           books={snapshot.books}
           store={store}
+          pickingBooks={pickingCollectionBooks}
           onClose={() => {
             setCollectionEditor(null);
-            setCollectionsOpen(true);
+            setPickingCollectionBooks(false);
+            if (!pickingCollectionBooks) setCollectionsOpen(true);
           }}
-          onSaved={async () => {
+          onSaved={async (id) => {
             await reload();
             setCollectionEditor(null);
-            setCollectionsOpen(true);
+            setPickingCollectionBooks(false);
+            openCollection(id);
           }}
         />
       )}
@@ -838,9 +867,31 @@ export function Library({
           onSaved={async (id, openFile) => {
             if (openFile) {
               try {
-                const data = await store.readLibrary();
+                const [data, saved] = await Promise.all([
+                  store.readLibrary(),
+                  store.repositories.positions.list(),
+                ]);
+                const file = data.files.find((file) => file.id === openFile);
+                const history = data.readings.filter(
+                  (reading) => reading.bookId === id,
+                );
+                const resume = saved
+                  .filter(
+                    (position) =>
+                      position.bookFileId === openFile &&
+                      (!position.cursor ||
+                        position.cursor.sha256 === file?.sha256),
+                  )
+                  .sort((a, b) => b.updatedAt - a.updatedAt)
+                  .map((position) =>
+                    history.find(
+                      (reading) => reading.id === position.readingId,
+                    ),
+                  )
+                  .find(Boolean);
                 const reading =
-                  latestReading(data.readings, id) ??
+                  resume ??
+                  latestReading(history, id) ??
                   (await store.addReading(id));
                 document
                   .querySelector<HTMLDialogElement>(
@@ -916,7 +967,10 @@ export function Library({
                       action.type === 'collection' &&
                       collectionId === action.id
                     )
-                      setCollectionId('all');
+                      setFilters((current) => ({
+                        ...current,
+                        collectionId: 'all',
+                      }));
                   },
                 );
               }}

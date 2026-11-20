@@ -71,17 +71,16 @@ test('удаление файла сохраняет книгу; редакти�
     page.getByRole('dialog', { name: 'Убрать файл EPUB?', exact: true }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Убрать только файл' }).click();
+  await page.getByText('Файлы и издания', { exact: true }).click();
   await expect(page.getByText(/Файл книги не прикреплён/)).toBeVisible();
   await expect(
-    page.getByRole('heading', {
-      name: 'Прочтение 1 · Хочу прочитать',
+    page.getByRole('button', {
+      name: 'Изменить план чтения',
       exact: true,
     }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
-  await page
-    .getByRole('button', { name: 'Управлять коллекциями', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Коллекции', exact: true }).click();
   await page
     .getByRole('dialog')
     .getByRole('button', { name: 'Создать коллекцию', exact: true })
@@ -91,6 +90,7 @@ test('удаление файла сохраняет книгу; редакти�
     .fill('Коллекция один');
   await page.getByRole('checkbox', { name: 'Тест удаления файла' }).check();
   await page.getByRole('button', { name: 'Сохранить коллекцию' }).click();
+  await page.getByRole('button', { name: 'Коллекции', exact: true }).click();
   await page
     .getByRole('button', { name: 'Редактировать «Коллекция один»' })
     .click();
@@ -103,8 +103,9 @@ test('удаление файла сохраняет книгу; редакти�
     page.getByRole('heading', { name: 'Коллекция два', exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole('dialog').getByText('0 книг', { exact: true }),
+    page.getByText('В коллекции пока нет книг.', { exact: true }),
   ).toBeVisible();
+  await page.getByRole('button', { name: 'Коллекции', exact: true }).click();
   await page
     .getByRole('button', { name: 'Удалить коллекцию «Коллекция два»' })
     .click();

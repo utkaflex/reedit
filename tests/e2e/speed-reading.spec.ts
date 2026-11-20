@@ -26,7 +26,7 @@ async function open(page: Page, long = false) {
     buffer: Buffer.from(fixture.bytes),
   });
   await page
-    .getByRole('button', { name: 'Создать книгу и сохранить EPUB' })
+    .getByRole('button', { name: 'Добавить в библиотеку' })
     .click();
   await page.getByRole('button', { name: 'Читать файл speed.epub' }).click();
   await expect(

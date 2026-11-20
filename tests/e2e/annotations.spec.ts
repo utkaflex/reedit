@@ -20,7 +20,7 @@ async function open(page: Page) {
     buffer: Buffer.from(fixture.bytes),
   });
   await page
-    .getByRole('button', { name: 'Создать книгу и сохранить EPUB' })
+    .getByRole('button', { name: 'Добавить в библиотеку' })
     .click();
   await page
     .getByRole('button', { name: 'Читать файл notes.epub', exact: true })
@@ -335,7 +335,7 @@ test('аннотации остаются после удаления файла
     .getByRole('button', { name: /^Книга с цитатами/ })
     .click();
   await page
-    .getByRole('button', { name: 'Прикрепить EPUB', exact: true })
+    .getByRole('button', { name: 'Прикрепить файл', exact: true })
     .click();
   await page.getByLabel('Файл книги', { exact: true }).setInputFiles({
     name: 'same.epub',

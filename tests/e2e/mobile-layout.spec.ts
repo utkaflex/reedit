@@ -14,7 +14,7 @@ test('зависший движок показывает ошибку с пов�
     buffer: Buffer.from(fixture.bytes),
   });
   await page
-    .getByRole('button', { name: 'Создать книгу и сохранить EPUB' })
+    .getByRole('button', { name: 'Добавить в библиотеку' })
     .click();
   await page.screenshot({
     path: test.info().outputPath('book-details.png'),
@@ -77,9 +77,9 @@ for (const width of [320, 390]) {
     await page.goto('/');
     await expect(
       page.getByRole('button', { name: 'Добавить', exact: true }),
-    ).toBeEnabled();
+    ).toHaveCount(0);
     await expect(
-      page.getByRole('button', { name: 'Загрузить книгу', exact: true }),
+      page.getByRole('button', { name: 'Загрузить EPUB или FB2', exact: true }),
     ).toBeVisible();
     for (const route of ['quotes', 'statistics']) {
       await page.goto(`/#/${route}`);

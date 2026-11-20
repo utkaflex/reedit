@@ -510,16 +510,14 @@ h2 {
   object-fit: cover;
 }
 .book-card__fallback {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: var(--space-4);
-  padding: var(--space-4);
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 8px;
   height: 100%;
   font-family: var(--font-editorial);
   color: var(--color-muted);
-  overflow-wrap: anywhere;
+  text-align: center;
 }
 .book-card__title {
   margin-top: var(--space-3);
@@ -901,12 +899,7 @@ h2 {
 .book-card__fallback {
   background: #294d3d;
   color: #fffcf6;
-  padding: 16px;
-  border-left: 5px solid #ffffff18;
-  justify-content: space-between;
-  gap: 12px;
-  height: 100%;
-  font-family: var(--font-editorial);
+  border-left: 3px solid #ffffff18;
 }
 .book-card__cover[data-tone='1'] .book-card__fallback {
   background: #49483c;
@@ -914,23 +907,29 @@ h2 {
 .book-card__cover[data-tone='2'] .book-card__fallback {
   background: #5d4036;
 }
-.book-card__fallback > span:not(.cover-edition) {
-  font-size: clamp(16px, 2vw, 23px);
+.cover-title-sample,
+.cover-short-title {
+  font-size: clamp(1rem, 2vw, 1.375rem);
   line-height: 1.2;
-  overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-line-clamp: 5;
-  -webkit-box-orient: vertical;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+.cover-title-sample {
+  position: absolute;
+  inset: 8px 8px auto;
+  height: 3.6em;
+  max-height: calc(100% - 16px);
+  visibility: hidden;
+  pointer-events: none;
   overflow: hidden;
 }
-.book-card__fallback small {
-  font: 11px/1.4 var(--font-ui);
+.cover-short-title {
+  min-width: 0;
+  max-width: 100%;
 }
-.cover-edition {
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font: 8px/1.4 var(--font-ui);
-  opacity: 0.8;
+.cover-initial {
+  font: 500 clamp(1.5rem, 8vw, 3rem)/1 var(--font-editorial);
 }
 .book-card__title {
   font-size: 15px;
@@ -944,6 +943,10 @@ h2 {
 .book-card__authors {
   font-size: 12px;
   margin-top: 4px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .status-chip {
   width: fit-content;

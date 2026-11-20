@@ -33,7 +33,7 @@ test('длинная русская книга: production-импорт, пол�
     buffer: Buffer.from(fixture.bytes),
   });
   await page
-    .getByRole('button', { name: 'Создать книгу и сохранить EPUB' })
+    .getByRole('button', { name: 'Добавить в библиотеку' })
     .click();
   await page
     .getByRole('button', { name: 'Читать файл large.epub', exact: true })
@@ -179,7 +179,7 @@ async function addBook(page: Page) {
     buffer: Buffer.from(fixture.bytes),
   });
   await page
-    .getByRole('button', { name: 'Создать книгу и сохранить EPUB' })
+    .getByRole('button', { name: 'Добавить в библиотеку' })
     .click();
   await page
     .getByRole('button', { name: 'Читать файл offline.epub', exact: true })

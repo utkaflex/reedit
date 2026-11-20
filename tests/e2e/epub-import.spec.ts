@@ -148,7 +148,7 @@ test('импорт всей книги, оригинал и SHA-256 пережи
     scale: 'css',
   });
   await page
-    .getByRole('button', { name: 'Создать книгу и сохранить EPUB' })
+    .getByRole('button', { name: 'Добавить в библиотеку' })
     .click();
   await expect(
     page.getByRole('dialog', { name: 'Синтетическая книга EPUB', exact: true }),
@@ -189,13 +189,13 @@ test('прикрепление к существующей книге сохра
   await libraryAction(page, 'manual');
   await page.getByLabel('Название', { exact: true }).fill('Мои метаданные');
   await page.getByRole('button', { name: 'Добавить в библиотеку' }).click();
-  await page.getByRole('button', { name: 'Изменить прочтение 1' }).click();
+  await page.getByRole('button', { name: 'Изменить план чтения' }).click();
   await page
     .getByLabel('Личный отзыв', { exact: true })
     .fill('Не заменять мой отзыв');
   await page.getByRole('button', { name: 'Сохранить прочтение' }).click();
   await page
-    .getByRole('button', { name: 'Прикрепить EPUB', exact: true })
+    .getByRole('button', { name: 'Прикрепить файл', exact: true })
     .click();
   await page.getByLabel('Файл книги', { exact: true }).setInputFiles({
     name: 'epub2.epub',
@@ -287,7 +287,7 @@ test('отмена во время анализа и до сохранения �
     buffer: Buffer.from(small.bytes),
   });
   await expect(
-    page.getByRole('button', { name: 'Создать книгу и сохранить EPUB' }),
+    page.getByRole('button', { name: 'Добавить в библиотеку' }),
   ).toBeVisible();
   await page
     .getByRole('button', { name: 'Закрыть импорт', exact: true })

@@ -59,7 +59,7 @@ test('книга, локальная обложка, отзыв, оценка и
   await expect(page.getByAltText('Предпросмотр обложки')).toBeVisible();
   await page.getByRole('button', { name: 'Добавить в библиотеку' }).click();
   await page
-    .getByRole('button', { name: 'Изменить прочтение 1', exact: true })
+    .getByRole('button', { name: 'Изменить план чтения', exact: true })
     .click();
   await page.getByLabel('Статус', { exact: true }).selectOption('finished');
   await page.getByLabel('Дата начала', { exact: true }).fill('2026-01-02');
@@ -73,9 +73,7 @@ test('книга, локальная обложка, отзыв, оценка и
     page.getByText('Оценка: 4,5 / 5', { exact: true }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
-  await page
-    .getByRole('button', { name: 'Управлять коллекциями', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Коллекции', exact: true }).click();
   await page
     .getByRole('dialog')
     .getByRole('button', { name: 'Создать коллекцию', exact: true })
@@ -90,7 +88,7 @@ test('книга, локальная обложка, отзыв, оценка и
   await expect(
     page.getByRole('heading', { name: 'Моя тестовая коллекция' }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
+  await page.getByRole('button', { name: 'Все книги', exact: true }).click();
   await page.reload();
   await page.getByRole('button', { name: /Фильтры и сортировка/ }).click();
   await page
@@ -144,7 +142,7 @@ test('редактирование, повторное прочтение и п�
     }),
   ).toBeVisible();
   await page
-    .getByRole('button', { name: 'Изменить прочтение 1', exact: true })
+    .getByRole('button', { name: 'Изменить план чтения', exact: true })
     .click();
   await page.getByLabel('Статус', { exact: true }).selectOption('finished');
   await page.getByLabel('Оценка', { exact: true }).selectOption('5');
@@ -156,8 +154,8 @@ test('редактирование, повторное прочтение и п�
     .getByRole('button', { name: 'Добавить прочтение', exact: true })
     .click();
   await expect(
-    page.getByRole('heading', {
-      name: 'Прочтение 2 · Хочу прочитать',
+    page.getByRole('button', {
+      name: 'Изменить план чтения',
       exact: true,
     }),
   ).toBeVisible();
@@ -235,7 +233,10 @@ test('дубли, поиск, фильтры, список и подтвержд
   await expect(
     page.getByRole('heading', { name: 'Ничего не найдено' }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Сбросить поиск и фильтры' }).click();
+  await page.getByRole('button', { name: 'Сбросить фильтры' }).click();
+  await expect(
+    page.getByLabel('Поиск по библиотеке', { exact: true }),
+  ).toHaveValue('Проза');
   await page.getByRole('button', { name: /Фильтры и сортировка/ }).click();
   await page
     .getByRole('dialog')

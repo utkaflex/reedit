@@ -159,6 +159,7 @@ const checks: Record<EntityName, Check> = {
     ...location,
     progression: number,
     cursor: optional(cursor),
+    chapter: optional(text),
   }),
   annotations: shape({
     ...location,

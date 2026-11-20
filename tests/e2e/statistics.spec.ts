@@ -151,7 +151,7 @@ test('время и слова трёх режимов сохраняются; �
     buffer: Buffer.from(fixture.bytes),
   });
   await page
-    .getByRole('button', { name: 'Создать книгу и сохранить EPUB' })
+    .getByRole('button', { name: 'Добавить в библиотеку' })
     .click();
   await page.getByRole('button', { name: 'Читать файл stats.epub' }).click();
   const speedButton = page.getByRole('button', {

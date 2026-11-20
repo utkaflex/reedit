@@ -1,13 +1,52 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Icon } from './Icon';
+
+function TypographicCover({ title }: { title: string }) {
+  const sample = useRef<HTMLSpanElement>(null);
+  const [fits, setFits] = useState(false);
+  useEffect(() => {
+    const element = sample.current;
+    if (!element) return;
+    let active = true;
+    const measure = () => {
+      if (active)
+        setFits(
+          element.scrollWidth <= element.clientWidth &&
+            element.scrollHeight <= element.clientHeight,
+        );
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    void document.fonts.ready.then(measure);
+    return () => {
+      active = false;
+      observer.disconnect();
+    };
+  }, [title]);
+  return (
+    <>
+      <span className="cover-title-sample" ref={sample}>
+        {title}
+      </span>
+      {fits ? (
+        <span className="cover-short-title">{title}</span>
+      ) : (
+        <span className="cover-initial">
+          {Array.from(title.trim())[0]?.toLocaleUpperCase('ru')}
+        </span>
+      )}
+    </>
+  );
+}
 /** A stable, local visual fallback. No generated user content or network request. */
 export function BookCover({
   title,
-  authors,
   url,
+  compact = false,
 }: {
   title: string;
-  authors: readonly string[];
   url?: string;
+  compact?: boolean;
 }) {
   const [failed, setFailed] = useState<string | null>(null);
   const tone =
@@ -28,9 +67,7 @@ export function BookCover({
         />
       ) : (
         <span className="book-card__fallback">
-          <span className="cover-edition">Личная библиотека</span>
-          <span>{title}</span>
-          <small>{authors.join(', ') || 'Автор не указан'}</small>
+          {compact ? <Icon name="book" /> : <TypographicCover title={title} />}
         </span>
       )}
     </span>

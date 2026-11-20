@@ -130,7 +130,7 @@ test('издание → локальная книга → исправлени�
     .getByRole('button', { name: 'Сохранить изменения', exact: true })
     .click();
   await page
-    .getByRole('button', { name: 'Прикрепить EPUB', exact: true })
+    .getByRole('button', { name: 'Прикрепить файл', exact: true })
     .click();
   const fixture = await makeEpubFixture({
     title: 'Мой EPUB',

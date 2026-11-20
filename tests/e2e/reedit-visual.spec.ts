@@ -60,7 +60,7 @@ for (const width of [320, 390, 1440]) {
       ],
     });
     await page
-      .getByRole('button', { name: 'Загрузить книгу', exact: true })
+      .getByRole('button', { name: 'Загрузить EPUB или FB2', exact: true })
       .click();
     await page.getByLabel('Файл книги', { exact: true }).setInputFiles({
       name: 'atlas.epub',
@@ -301,9 +301,8 @@ for (const width of [320, 390, 1440]) {
       await page
         .getByRole('button', { name: 'Показать книги', exact: true })
         .click();
-      const filter = page.getByRole('button', {
-        name: /Фильтры и сортировка · Хочу прочитать/,
-      });
+      const filter = page.getByRole('group', { name: 'Активные фильтры' });
+      await expect(filter).toContainText('Хочу прочитать');
       await expect(filter).toBeVisible();
       await filter.screenshot({
         path: test.info().outputPath('filter.png'),

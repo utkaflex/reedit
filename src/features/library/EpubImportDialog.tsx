@@ -191,7 +191,7 @@ export function EpubImportDialog({
                 disabled={!title.trim() && bookId === 'new'}
               >
                 {bookId === 'new'
-                  ? `Создать книгу и сохранить ${label}`
+                  ? 'Добавить в библиотеку'
                   : `Прикрепить ${label}`}
               </Button>
             </>
@@ -273,28 +273,14 @@ export function EpubImportDialog({
         {phase === 'duplicate' && (
           <div className="form-stack">
             <h3>Этот файл уже в библиотеке</h3>
-            <p>
-              Книга уже сохранена. Откройте её — ваши записи и место чтения на
-              месте.
-            </p>
             {existing && (
-              <>
-                <Button
-                  onClick={() => {
-                    void onSaved(existing.bookId, existing.id);
-                  }}
-                >
-                  Читать сохранённую книгу
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    void onSaved(existing.bookId);
-                  }}
-                >
-                  Открыть книгу с этим {label}
-                </Button>
-              </>
+              <Button
+                onClick={() => {
+                  void onSaved(existing.bookId, existing.id);
+                }}
+              >
+                Открыть сохранённую книгу
+              </Button>
             )}
           </div>
         )}

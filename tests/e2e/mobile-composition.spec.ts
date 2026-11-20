@@ -41,7 +41,7 @@ for (const width of [320, 390]) {
     await expect(page.getByLabel('Поиск по библиотеке')).toHaveCount(0);
     await expect(
       page.getByRole('button', { name: 'Коллекции', exact: true }),
-    ).toHaveCount(0);
+    ).toBeVisible();
     await aboveNavigation(
       page,
       page.getByRole('button', { name: 'Добавить вручную', exact: true }),
@@ -115,7 +115,7 @@ for (const width of [320, 390]) {
       ],
     });
     await page
-      .getByRole('button', { name: 'Загрузить книгу', exact: true })
+      .getByRole('button', { name: 'Загрузить EPUB или FB2', exact: true })
       .click();
     await page.getByLabel('Файл книги', { exact: true }).setInputFiles({
       name: 'garden.epub',
@@ -123,7 +123,7 @@ for (const width of [320, 390]) {
       buffer: Buffer.from(fixture.bytes),
     });
     await page
-      .getByRole('button', { name: 'Создать книгу и сохранить EPUB' })
+      .getByRole('button', { name: 'Добавить в библиотеку' })
       .click();
     await page
       .getByRole('button', { name: 'Читать файл garden.epub', exact: true })

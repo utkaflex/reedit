@@ -1,4 +1,10 @@
-import type { Book, Reading, Id } from './model';
+import type {
+  Book,
+  BookFileSummary,
+  Reading,
+  ReadingPosition,
+  Id,
+} from './model';
 import { IntegrityError } from './rules';
 
 export const statusLabels: Record<Reading['status'], string> = {
@@ -8,6 +14,51 @@ export const statusLabels: Record<Reading['status'], string> = {
   paused: 'Отложено',
   abandoned: 'Брошено',
 };
+export function readingStatus(
+  reading: Reading | undefined,
+  hasPosition = false,
+): Reading['status'] {
+  if (!reading) return 'planned';
+  if (
+    reading.status === 'planned' &&
+    (hasPosition || reading.startedAt !== null || reading.finishedAt !== null)
+  )
+    return 'active';
+  return reading.status;
+}
+
+export function readableEdition(
+  files: BookFileSummary[],
+  positions: ReadingPosition[],
+  bookId: Id,
+  readingId?: Id,
+): {
+  file: BookFileSummary | undefined;
+  position: ReadingPosition | undefined;
+} {
+  const editions = files.filter(
+    (file) => file.bookId === bookId && file.sha256,
+  );
+  let file = editions[0];
+  let position: ReadingPosition | undefined;
+  for (const saved of positions) {
+    if (
+      saved.readingId !== readingId ||
+      (position && position.updatedAt >= saved.updatedAt)
+    )
+      continue;
+    const edition = editions.find(
+      (entry) =>
+        entry.id === saved.bookFileId &&
+        (!saved.cursor || saved.cursor.sha256 === entry.sha256),
+    );
+    if (edition) {
+      position = saved;
+      file = edition;
+    }
+  }
+  return { file, position };
+}
 export const normalizeText = (value: string): string =>
   value
     .normalize('NFKC')
@@ -108,12 +159,18 @@ export function selectBooks(
     status: string;
     collectionBookIds: Id[] | null;
     sort: LibrarySort;
+    startedReadingIds?: ReadonlySet<Id>;
   },
 ): Book[] {
   const query = normalizeText(options.query);
   const isbnQuery = normalizeIsbn(options.query);
-  const statusFor = (book: Book) =>
-    latestReading(readings, book.id)?.status ?? 'planned';
+  const statusFor = (book: Book) => {
+    const reading = latestReading(readings, book.id);
+    return readingStatus(
+      reading,
+      reading ? options.startedReadingIds?.has(reading.id) : false,
+    );
+  };
   const rating = (book: Book) => latestReading(readings, book.id)?.rating ?? -1;
   return books
     .filter(

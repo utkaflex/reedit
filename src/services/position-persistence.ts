@@ -41,10 +41,12 @@ export class PositionPersistenceService {
       while (this.pending) {
         const location = this.pending;
         this.pending = null;
+        const chapter = location.chapter.trim();
         const identity = JSON.stringify([
           location.cfi,
           location.cursor,
           location.progression,
+          chapter,
         ]);
         if (this.lastSaved === identity) {
           this.onState('saved');
@@ -58,6 +60,7 @@ export class PositionPersistenceService {
             cfi: location.cfi,
             progression: location.progression,
             ...(location.cursor ? { cursor: location.cursor } : {}),
+            ...(chapter ? { chapter } : {}),
           });
           this.lastSaved = identity;
           this.onState('saved');
