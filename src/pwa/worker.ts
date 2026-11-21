@@ -5,42 +5,111 @@ declare const PRECACHE: readonly { url: string; sha256: string }[];
 const worker = globalThis as unknown as ServiceWorkerGlobalScope;
 const prefix = 'reedit-shell-';
 const cacheName = prefix + BUILD;
+const shellPath = '/index.html';
 const allowed = new Set(
   PRECACHE.map((entry) => new URL(entry.url, worker.location.origin).href),
 );
+type Entry = (typeof PRECACHE)[number];
+
+async function verified(entry: Entry, response?: Response): Promise<Response> {
+  const resource =
+    response ??
+    (await fetch(
+      new Request(entry.url, {
+        cache: 'reload',
+        credentials: 'same-origin',
+        redirect: 'error',
+      }),
+    ));
+  if (!resource.ok || resource.type === 'opaque')
+    throw new Error('Shell resource unavailable');
+  const hash = Array.from(
+    new Uint8Array(
+      await crypto.subtle.digest(
+        'SHA-256',
+        await resource.clone().arrayBuffer(),
+      ),
+    ),
+    (byte) => byte.toString(16).padStart(2, '0'),
+  ).join('');
+  if (hash !== entry.sha256) throw new Error('Mixed deployment rejected');
+  return resource;
+}
+
+async function cacheShell(document?: Response): Promise<void> {
+  const index = PRECACHE.find((entry) => entry.url === shellPath);
+  if (!index) throw new Error('Shell document missing');
+  const html = await verified(index, document);
+  const cache = await caches.open(cacheName);
+  for (const entry of PRECACHE)
+    if (entry !== index) await cache.put(entry.url, await verified(entry));
+  // Enabling offline navigation is the last step, once every dependency is present.
+  await cache.put(index.url, html);
+}
+
+async function cached(
+  request: Request | string,
+  name = cacheName,
+): Promise<Response | undefined> {
+  try {
+    return await caches.match(request, { cacheName: name });
+  } catch {
+    return undefined;
+  }
+}
+
+function activeBuild(active: ServiceWorker): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    const finish = (build?: string) => {
+      clearTimeout(timer);
+      channel.port1.close();
+      resolve(build);
+    };
+    const timer = setTimeout(finish, 1000);
+    channel.port1.onmessage = (event: MessageEvent<unknown>) => {
+      const status = event.data;
+      finish(
+        status &&
+          typeof status === 'object' &&
+          'build' in status &&
+          typeof status.build === 'string'
+          ? status.build
+          : undefined,
+      );
+    };
+    try {
+      active.postMessage({ type: 'STATUS' }, [channel.port2]);
+    } catch {
+      finish();
+    }
+  });
+}
+
+let recovery: Promise<void> | null = null;
 worker.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
-      const cache = await caches.open(cacheName);
       try {
-        for (const entry of PRECACHE) {
-          const response = await fetch(
-            new Request(entry.url, {
-              cache: 'reload',
-              credentials: 'same-origin',
-              redirect: 'error',
-            }),
-          );
-          if (!response.ok || response.type === 'opaque')
-            throw new Error('Shell resource unavailable');
-          const hash = Array.from(
-            new Uint8Array(
-              await crypto.subtle.digest(
-                'SHA-256',
-                await response.clone().arrayBuffer(),
-              ),
-            ),
-            (byte) => byte.toString(16).padStart(2, '0'),
-          ).join('');
-          if (hash !== entry.sha256)
-            throw new Error('Mixed deployment rejected');
-          await cache.put(entry.url, response);
-        }
+        await cacheShell();
       } catch (error) {
         await caches.delete(cacheName);
         throw error;
       }
-      // No skipWaiting: a new edition never interrupts an open book.
+      // A client showing the old worker's error cannot apply an update from the UI.
+      const active = worker.registration.active;
+      const build = active && (await activeBuild(active));
+      if (!build || (await cached(shellPath, prefix + build))) return;
+      const clients = await worker.clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true,
+      });
+      if (
+        !clients.some((client) =>
+          new URL(client.url).hash.startsWith('#/reading'),
+        )
+      )
+        await worker.skipWaiting();
     })(),
   );
 });
@@ -56,22 +125,39 @@ worker.addEventListener('fetch', (event) => {
   )
     return;
   if (event.request.mode === 'navigate') {
-    event.respondWith(
-      (async () =>
-        (await (await caches.open(cacheName)).match('/index.html')) ??
-        new Response(
+    const navigation = (async () => {
+      const html = await cached(shellPath);
+      if (html) return html;
+      try {
+        const online = await fetch(event.request);
+        if (online.ok && !recovery) {
+          recovery = cacheShell(online.clone())
+            .catch(() => {
+              // A newer deployment can be rendered from the network, but cannot be cached as this edition.
+            })
+            .finally(() => {
+              recovery = null;
+            });
+        }
+        return online;
+      } catch {
+        return new Response(
           'Офлайн-оболочка недоступна. Подключитесь к интернету и откройте Reedit ещё раз.',
           {
             status: 503,
-            headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+            headers: {
+              'Content-Type': 'text/plain; charset=utf-8',
+              'Cache-Control': 'no-store',
+            },
           },
-        ))(),
-    );
+        );
+      }
+    })();
+    event.respondWith(navigation);
+    event.waitUntil(navigation.then(() => recovery));
   } else if (allowed.has(url.href)) {
     event.respondWith(
-      (async () =>
-        (await (await caches.open(cacheName)).match(event.request)) ??
-        fetch(event.request))(),
+      (async () => (await cached(event.request)) ?? fetch(event.request))(),
     );
   } else if (
     !url.search &&
@@ -82,8 +168,8 @@ worker.addEventListener('fetch', (event) => {
       (async () => {
         for (const key of await caches.keys())
           if (key.startsWith(prefix)) {
-            const cached = await (await caches.open(key)).match(event.request);
-            if (cached) return cached;
+            const response = await cached(event.request, key);
+            if (response) return response;
           }
         return fetch(event.request);
       })(),

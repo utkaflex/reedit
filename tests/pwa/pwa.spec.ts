@@ -210,6 +210,96 @@ async function waiting(page: Page) {
     Boolean((await navigator.serviceWorker.getRegistration())?.waiting),
   );
 }
+async function removeOfflineShell(page: Page) {
+  await page.evaluate(async () => {
+    for (const key of await caches.keys())
+      if (key.startsWith('reedit-shell-')) await caches.delete(key);
+  });
+}
+
+test('сеть восстанавливает отсутствующую офлайн-оболочку и локальная книга остаётся доступной', async ({
+  page,
+  context,
+}) => {
+  await ready(page);
+  await addBook(page);
+  await page.locator('.reader-screen').press('ArrowRight');
+  await expect(page.locator('.reader-screen')).toHaveAttribute(
+    'data-position-state',
+    'saved',
+  );
+  await page
+    .getByRole('button', { name: 'Закрыть книгу', exact: true })
+    .click();
+  await removeOfflineShell(page);
+  expect((await page.reload())?.status()).toBe(200);
+  await expect(
+    page.getByRole('heading', { name: 'Локальная книга PWA', exact: true }),
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(async () => Boolean(await caches.match('/index.html'))),
+    )
+    .toBe(true);
+  await context.setOffline(true);
+  expect((await page.reload())?.status()).toBe(200);
+  await page
+    .getByRole('button', { name: 'Продолжить чтение', exact: true })
+    .click();
+  await expect(
+    page
+      .locator('iframe')
+      .contentFrame()
+      .getByText('Последний раздел, сохранённый только на устройстве.'),
+  ).toBeVisible();
+});
+
+test('обновление восстанавливает запуск при отсутствующем кэше предыдущей версии', async ({
+  page,
+  context,
+  request,
+}) => {
+  await ready(page);
+  await removeOfflineShell(page);
+  await context.setOffline(true);
+  expect((await page.reload())?.status()).toBe(503);
+  await expect(page.getByText(/^Офлайн-оболочка недоступна/u)).toBeVisible();
+  await context.setOffline(false);
+  await request.post('/__test/1');
+  await page.evaluate(async () => {
+    await (await navigator.serviceWorker.getRegistration())?.update();
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const registration = await navigator.serviceWorker.getRegistration();
+        if (
+          !registration?.active ||
+          registration.installing ||
+          registration.waiting
+        )
+          return '';
+        return await new Promise<string>((resolve) => {
+          const active = registration.active;
+          const channel = new MessageChannel();
+          channel.port1.onmessage = (
+            event: MessageEvent<{ build: string }>,
+          ) => {
+            channel.port1.close();
+            resolve(event.data.build);
+          };
+          active?.postMessage({ type: 'STATUS' }, [channel.port2]);
+        });
+      }),
+    )
+    .toMatch(/-test-1$/u);
+  await context.setOffline(true);
+  expect((await page.reload())?.status()).toBe(200);
+  await expect(
+    page.getByRole('heading', { name: 'Библиотека', exact: true }),
+  ).toBeVisible();
+});
+
 test('возврат к книге во время применения обновления не перезагружает открытую страницу', async ({
   page,
   request,
