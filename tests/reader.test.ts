@@ -70,6 +70,9 @@ describe('навигация чтения', () => {
     );
     expect(readerGesture({ ...gesture, interactive: true })).toBe('none');
     expect(readerGesture({ ...gesture, duration: 600 })).toBe('none');
+    expect(readerGesture({ ...gesture, duration: 600, endX: 120 })).toBe(
+      'next',
+    );
     expect(readerGesture({ ...gesture, x: 5, endX: 200 })).toBe('none');
     expect(
       readerGesture({ ...gesture, mode: 'scroll', x: 330, endX: 330 }),

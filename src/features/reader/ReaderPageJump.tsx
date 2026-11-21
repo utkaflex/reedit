@@ -1,0 +1,81 @@
+import { useState } from 'react';
+import type { ReaderLocation } from '../../domain/reader';
+import { Button } from '../../ui/Button';
+import { Dialog } from '../../ui/Dialog';
+
+export function ReaderPageJump({
+  chapter,
+  page,
+  busy,
+  onClose,
+  onJump,
+}: {
+  chapter: string;
+  page: NonNullable<ReaderLocation['page']>;
+  busy: boolean;
+  onClose: () => void;
+  onJump: (number: number) => Promise<boolean>;
+}) {
+  const [value, setValue] = useState(String(page.number));
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <Dialog
+      open
+      presentation="panel"
+      title="Перейти к странице"
+      onClose={onClose}
+    >
+      <form
+        className="form-stack"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (busy) return;
+          setError(null);
+          void onJump(Number(value))
+            .then((moved) => {
+              if (moved) onClose();
+            })
+            .catch((reason: unknown) => {
+              setError(
+                reason instanceof Error
+                  ? reason.message
+                  : 'Не удалось открыть страницу.',
+              );
+            });
+        }}
+      >
+        {chapter && (
+          <p>
+            <strong>{chapter}</strong>
+          </p>
+        )}
+        <p>
+          Страницы текущего раздела, от 1 до {page.total}. Число страниц зависит
+          от оформления.
+        </p>
+        <label className="field">
+          <span>Номер страницы</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]+"
+            required
+            value={value}
+            onChange={(event) => {
+              setValue(event.target.value);
+            }}
+          />
+        </label>
+        {error && (
+          <p className="error-text" role="alert">
+            {error}
+          </p>
+        )}
+        <Button type="submit" disabled={busy}>
+          Перейти
+        </Button>
+      </form>
+    </Dialog>
+  );
+}

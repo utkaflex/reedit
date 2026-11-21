@@ -20,6 +20,7 @@ import {
   type ReaderLocation,
   type ReaderOpenOptions,
   type ReaderPreferences,
+  type ReaderSearchMatch,
   type ReaderSession,
   type ReaderTarget,
 } from '../../domain/reader';
@@ -42,6 +43,7 @@ import {
 } from './text-index';
 import { prepareTextDocument } from './text-dom';
 import { PositionResolver } from './PositionResolver';
+import { GuidedScroll } from './GuidedScroll';
 import {
   cursorAt,
   cursorSection,
@@ -77,7 +79,19 @@ function isDocument(value: unknown): value is Document {
 class EpubReaderSession implements ReaderSession {
   private readonly diagnostics = new ReaderDiagnostics();
   private originalSpeedMode: ReaderPreferences['mode'] | null = null;
-  private centerFrame = 0;
+  private readonly guidedScroll = new GuidedScroll(() => {
+    this.drawSpeedRange(false);
+  });
+  private speedScrollWpm: number | null = null;
+  setSpeedScrollPlayback(playing: boolean, wpm: number): void {
+    if (!playing) {
+      this.speedScrollWpm = null;
+      this.guidedScroll.stop();
+      return;
+    }
+    this.speedScrollWpm = wpm;
+    this.centerSpeedLine();
+  }
   async setSpeedCentering(enabled: boolean): Promise<void> {
     if (enabled === (this.originalSpeedMode !== null)) return;
     const deadline = performance.now() + 5000;
@@ -110,10 +124,16 @@ class EpubReaderSession implements ReaderSession {
   }
   private speedStop: (() => void) | null = null;
   private returnCursor: ReadingCursor | null = null;
-  private speedSource: { spineIndex: number; doc: Document } | null = null;
-  private speedRange: { start: ReadingCursor; end: ReadingCursor } | null =
-    null;
+  private sourceCache: { spineIndex: number; doc: Document } | null = null;
+  private speedRange: {
+    start: ReadingCursor;
+    end: ReadingCursor;
+    focusEnd: ReadingCursor | null;
+  } | null = null;
   private speedOverlay: HTMLDivElement | null = null;
+  private searchRange: { start: ReadingCursor; end: ReadingCursor } | null =
+    null;
+  private searchOverlay: HTMLDivElement | null = null;
   private flashTimer: ReturnType<typeof setTimeout> | null = null;
   private highlights: Annotation[] = [];
   private drawnHighlights: string[] = [];
@@ -143,6 +163,7 @@ class EpubReaderSession implements ReaderSession {
   private motion = window.matchMedia('(prefers-reduced-motion: reduce)');
   private motionChanged = () => {
     for (const contents of this.mounted.keys()) this.styleContent(contents);
+    this.centerSpeedLine();
   };
   private viewportResize = () => {
     if (this.ready && !this.disposed) {
@@ -166,7 +187,7 @@ class EpubReaderSession implements ReaderSession {
     )
       return;
     this.latest = location;
-    if (this.ready && !this.muted) {
+    if (this.ready && !this.muted && !this.guidedScroll.moving) {
       try {
         this.publish(location);
       } catch (error) {
@@ -634,7 +655,7 @@ class EpubReaderSession implements ReaderSession {
       );
       if (
         token &&
-        !this.speedRects(
+        !this.visibleRangeRects(
           this.returnCursor,
           cursorAt(this.textIndex, section.spineIndex, token.end),
         ).length
@@ -662,6 +683,9 @@ class EpubReaderSession implements ReaderSession {
       atStart: location.atStart,
       atEnd: location.atEnd,
     };
+    const { page, total } = location.start.displayed;
+    if (this.preferences.mode === 'paginated' && page >= 1 && page <= total)
+      result.page = { number: page, total };
     // Engine viewport boundaries, deliberately independent of the sticky restore cursor.
     try {
       if (location.start.index === index) {
@@ -683,7 +707,8 @@ class EpubReaderSession implements ReaderSession {
       /* An unresolved boundary cannot be credited as read text. */
     }
     this.lastConfirmed = result;
-    this.drawSpeedRange();
+    this.drawSpeedRange(false);
+    this.drawSearchMatch();
     this.options.onLocation(result);
   }
   private async settle(
@@ -784,27 +809,167 @@ class EpubReaderSession implements ReaderSession {
     if (this.lastConfirmed?.atStart) return Promise.resolve(false);
     return this.command(() => this.requireRendition().prev(), true);
   }
+  goToPage(number: number) {
+    const page = this.lastConfirmed?.page;
+    if (!page || !Number.isInteger(number) || number < 1 || number > page.total)
+      return Promise.reject(new Error('Такой страницы в текущем разделе нет.'));
+    if (number === page.number) return Promise.resolve(true);
+    return this.command(() => {
+      const viewport =
+        this.options.host.querySelector<HTMLElement>('.epub-container');
+      if (!viewport)
+        return Promise.reject(new Error('Страница ещё не готова.'));
+      // With spreads disabled, epub.js advances by one viewport width.
+      const direction = getComputedStyle(viewport).direction === 'rtl' ? -1 : 1;
+      this.returnCursor = null;
+      viewport.scrollLeft = direction * (number - 1) * viewport.clientWidth;
+      return Promise.resolve();
+    });
+  }
   setSpeedInteraction(onStop: (() => void) | null): void {
     this.speedStop = onStop;
     if (onStop) this.returnCursor = null;
   }
-  private async sourceForSpeed(spineIndex: number): Promise<Document> {
+  private async sourceDocument(spineIndex: number): Promise<Document> {
     this.ensureAlive();
     const content = this.contentFor(spineIndex);
     if (content) return content.document;
-    if (this.speedSource?.spineIndex === spineIndex)
-      return this.speedSource.doc;
+    if (this.sourceCache?.spineIndex === spineIndex)
+      return this.sourceCache.doc;
     if (!this.book) throw new Error('Книга закрыта.');
     const doc = await this.book.load(this.book.spine.get(spineIndex).url);
     this.ensureAlive();
     if (!isDocument(doc)) throw new Error('DOM раздела недоступен.');
     prepareTextDocument(doc);
-    this.speedSource = { spineIndex, doc };
+    this.sourceCache = { spineIndex, doc };
     return doc;
   }
   getTextIndex(): DocumentTextIndex | null {
     return this.textIndex;
   }
+  async searchText(
+    query: string,
+    signal: AbortSignal,
+  ): Promise<ReaderSearchMatch[]> {
+    const index = this.textIndex;
+    if (!index) throw new Error('Текст книги ещё готовится.');
+    const phrase = query
+      .normalize('NFC')
+      .replace(/[\u00ad\u200b\ufeff]/gu, '')
+      .trim()
+      .replace(/\s+/gu, ' ');
+    if (!phrase) return [];
+    const pattern = new RegExp(
+      phrase.replace(/[\\^$.*+?()[\]{}|]/gu, '\\$&'),
+      'giu',
+    );
+    const navigation = flattenNavigation(this.options.index.navigation);
+    const matches: ReaderSearchMatch[] = [];
+    const schedule = createIndexScheduler(signal);
+    this.operations++;
+    try {
+      for (const section of index.sections) {
+        const pauseBeforeSection = schedule();
+        if (pauseBeforeSection) await pauseBeforeSection;
+        pattern.lastIndex = 0;
+        const first = pattern.exec(section.text);
+        if (!first) continue;
+        const doc = await this.sourceDocument(section.spineIndex);
+        signal.throwIfAborted();
+        const items = navigation.filter(
+          (item) =>
+            item.path === section.path &&
+            item.label.trim() &&
+            !/^Раздел\s+\d+$/iu.test(item.label.trim()),
+        );
+        const markers = items
+          .flatMap((item) => {
+            const element = item.fragment
+              ? doc.getElementById(item.fragment)
+              : null;
+            if (!item.fragment) return [{ offset: 0, label: item.label }];
+            if (!element || !this.resolver || !doc.body.contains(element))
+              return [];
+            const range = doc.createRange();
+            range.selectNodeContents(element);
+            return [
+              {
+                offset: this.resolver.fromRange(section.spineIndex, range)
+                  .offset,
+                label: item.label,
+              },
+            ];
+          })
+          .sort((a, b) => a.offset - b.offset);
+        let chapter =
+          doc.querySelector('h1,h2,h3')?.textContent.trim() ||
+          'Раздел ' + String(section.spineIndex + 1);
+        let marker = 0;
+        let nextChapter = markers[marker];
+        for (
+          let hit: RegExpExecArray | null = first;
+          hit;
+          hit = pattern.exec(section.text)
+        ) {
+          const start = hit.index;
+          while (nextChapter && nextChapter.offset <= start) {
+            chapter = nextChapter.label;
+            nextChapter = markers[++marker];
+          }
+          matches.push({
+            spineIndex: section.spineIndex,
+            start,
+            end: start + hit[0].length,
+            chapter,
+            text: section.text,
+          });
+          const pause = schedule();
+          if (pause) await pause;
+        }
+      }
+      return matches;
+    } finally {
+      this.endOperation();
+    }
+  }
+  async goToSearchMatch(match: ReaderSearchMatch): Promise<boolean> {
+    if (!this.textIndex) throw new Error('Текст книги ещё готовится.');
+    const start = cursorAt(this.textIndex, match.spineIndex, match.start);
+    const end = cursorAt(this.textIndex, match.spineIndex, match.end);
+    if (!(await this.goToCursor(start))) return false;
+    this.searchRange = { start, end };
+    this.drawSearchMatch();
+    return true;
+  }
+  clearSearchMatch(): void {
+    this.searchRange = null;
+    this.searchOverlay?.remove();
+    this.searchOverlay = null;
+  }
+  private drawSearchMatch = () => {
+    if (!this.searchRange || this.disposed) return;
+    const overlay = this.searchOverlay ?? document.createElement('div');
+    overlay.className = 'reader-search-highlight';
+    overlay.setAttribute('aria-hidden', 'true');
+    const rects = this.visibleRangeRects(
+      this.searchRange.start,
+      this.searchRange.end,
+    );
+    overlay.replaceChildren(
+      ...rects.map(({ left, top, width, height }) => {
+        const mark = document.createElement('span');
+        Object.assign(mark.style, {
+          left: String(left) + 'px',
+          top: String(top) + 'px',
+          width: String(width) + 'px',
+          height: String(height) + 'px',
+        });
+        return mark;
+      }),
+    );
+    if (!overlay.isConnected) this.options.host.append(overlay);
+    this.searchOverlay = overlay;
+  };
   async getSpeedDocument(): Promise<SpeedDocument> {
     if (!this.textIndex || !this.resolver)
       throw new Error('Текстовый индекс не готов.');
@@ -813,7 +978,7 @@ class EpubReaderSession implements ReaderSession {
       const paragraphEnds: Record<number, number[]> = {};
       const yieldTask = createIndexScheduler(this.options.signal);
       for (const section of this.textIndex.sections) {
-        const doc = await this.sourceForSpeed(section.spineIndex);
+        const doc = await this.sourceDocument(section.spineIndex);
         const ends = new Set<number>();
         for (const block of doc.querySelectorAll(
           'p,div,li,h1,h2,h3,h4,h5,h6,blockquote,pre,figcaption,br',
@@ -839,7 +1004,7 @@ class EpubReaderSession implements ReaderSession {
     this.operations++;
     try {
       const section = cursorSection(this.textIndex, cursor);
-      const doc = await this.sourceForSpeed(cursor.spineIndex);
+      const doc = await this.sourceDocument(cursor.spineIndex);
       return {
         cursor: { ...cursor },
         cfi: this.resolver.toCfi(cursor, doc),
@@ -859,9 +1024,10 @@ class EpubReaderSession implements ReaderSession {
       this.endOperation();
     }
   }
-  private speedRects(
+  private visibleRangeRects(
     start: ReadingCursor,
     end: ReadingCursor,
+    visibleOnly = true,
   ): { left: number; top: number; width: number; height: number }[] {
     const content = this.contentFor(start.spineIndex);
     if (!content || !this.resolver) return [];
@@ -874,10 +1040,11 @@ class EpubReaderSession implements ReaderSession {
         (rect) =>
           rect.width > 0 &&
           rect.height > 0 &&
-          rect.bottom + frame.top > host.top &&
-          rect.top + frame.top < host.bottom &&
-          rect.right + frame.left > host.left &&
-          rect.left + frame.left < host.right,
+          (!visibleOnly ||
+            (rect.bottom + frame.top > host.top &&
+              rect.top + frame.top < host.bottom &&
+              rect.right + frame.left > host.left &&
+              rect.left + frame.left < host.right)),
       )
       .map((rect) => ({
         left: rect.left + frame.left - host.left,
@@ -891,7 +1058,10 @@ class EpubReaderSession implements ReaderSession {
     const overlay = this.speedOverlay ?? document.createElement('div');
     overlay.className = 'speed-highlight-layer';
     overlay.setAttribute('aria-hidden', 'true');
-    const rects = this.speedRects(this.speedRange.start, this.speedRange.end);
+    const rects = this.visibleRangeRects(
+      this.speedRange.start,
+      this.speedRange.end,
+    );
     // Inline markup can yield several DOM rectangles for one line.
     const lines: typeof rects = [];
     for (const rect of rects) {
@@ -916,13 +1086,14 @@ class EpubReaderSession implements ReaderSession {
       const sameLine =
         Number.isFinite(top) && Math.abs(top - rect.top) < rect.height / 2;
       mark.className = 'speed-word-highlight';
-      mark.style.transition =
-        animate &&
-        sameLine &&
-        this.preferences.animations &&
-        !this.motion.matches
-          ? 'left 65ms linear, width 65ms linear'
-          : 'none';
+      if (animate || !previous)
+        mark.style.transition =
+          animate &&
+          sameLine &&
+          this.preferences.animations &&
+          !this.motion.matches
+            ? 'left 65ms linear, width 65ms linear'
+            : 'none';
       Object.assign(mark.style, {
         left: String(rect.left) + 'px',
         top: String(rect.top) + 'px',
@@ -977,43 +1148,52 @@ class EpubReaderSession implements ReaderSession {
         });
       });
     this.ensureAlive();
-    if (!this.speedRects(start, firstEnd).length) {
+    if (!this.visibleRangeRects(start, firstEnd, !center).length) {
+      this.guidedScroll.stop();
       if (!(await this.goToCursor(start)))
         throw new Error('Дождитесь завершения изменения страницы и повторите.');
     }
-    this.speedRange = { start: { ...start }, end: { ...end } };
+    const firstFocusedRange = center && !this.speedRange?.focusEnd;
+    this.speedRange = {
+      start: { ...start },
+      end: { ...end },
+      focusEnd: center ? firstEnd : null,
+    };
     this.drawSpeedRange();
-    if (center) this.centerSpeedLine(start, firstEnd);
+    this.centerSpeedLine(firstFocusedRange);
   }
-  private centerSpeedLine(start: ReadingCursor, end: ReadingCursor): void {
-    cancelAnimationFrame(this.centerFrame);
+  private centerSpeedLine(initial = false): void {
+    const range = this.speedRange;
+    if (!range?.focusEnd || (!initial && this.speedScrollWpm === null)) return;
     const container =
       this.options.host.querySelector<HTMLElement>('.epub-container');
-    const line = this.speedRects(start, end)[0];
+    const line = this.visibleRangeRects(range.start, range.focusEnd, false)[0];
     if (!container || !line) return;
-    const from = container.scrollTop;
     const to = Math.max(
       0,
       Math.min(
         container.scrollHeight - container.clientHeight,
-        from + line.top + line.height / 2 - this.options.host.clientHeight / 2,
+        container.scrollTop +
+          line.top +
+          line.height / 2 -
+          this.options.host.clientHeight / 2,
       ),
     );
-    if (Math.abs(to - from) < 2) return;
-    const began = performance.now();
-    const duration =
-      !this.preferences.animations || this.motion.matches ? 0 : 100;
-    const move = (now: number) => {
-      if (this.disposed || !this.speedRange) return;
-      const fraction = duration ? Math.min(1, (now - began) / duration) : 1;
-      container.scrollTop = from + (to - from) * (1 - (1 - fraction) ** 3);
+    if (initial) {
+      container.scrollTop = to;
       this.drawSpeedRange(false);
-      if (fraction < 1) this.centerFrame = requestAnimationFrame(move);
-    };
-    move(began);
+      return;
+    }
+    if (this.speedScrollWpm === null) return;
+    this.guidedScroll.moveTo(
+      container,
+      to,
+      this.speedScrollWpm,
+      !this.preferences.animations || this.motion.matches,
+    );
   }
   clearSpeedRange(): void {
-    cancelAnimationFrame(this.centerFrame);
+    this.guidedScroll.stop();
     if (this.flashTimer) clearTimeout(this.flashTimer);
     this.flashTimer = null;
     this.speedRange = null;
@@ -1320,16 +1500,19 @@ class EpubReaderSession implements ReaderSession {
       }
       this.size = size;
       const cfi = this.lastConfirmed?.cfi;
+      const cursor = this.speedRange?.focusEnd
+        ? this.speedRange.start
+        : this.lastConfirmed?.cursor;
       void this.command(
         async () => {
           for (const contents of this.mounted.keys())
             this.styleContent(contents);
           this.requireRendition().resize(size.width, size.height);
-          await this.display(cfi);
+          await this.display(cursor ? await this.cfiForCursor(cursor) : cfi);
         },
         false,
-        cfi,
-        this.lastConfirmed?.cursor,
+        undefined,
+        cursor,
       ).catch((error: unknown) => {
         if (!this.disposed)
           this.options.onError(
@@ -1341,6 +1524,10 @@ class EpubReaderSession implements ReaderSession {
     }, 100);
   }
   private observeResize() {
+    this.options.host.addEventListener('scroll', this.drawSearchMatch, {
+      capture: true,
+      passive: true,
+    });
     this.observer = new ResizeObserver(() => {
       this.viewportResize();
     });
@@ -1382,7 +1569,7 @@ class EpubReaderSession implements ReaderSession {
     const source = this.options.index.spine[contents.sectionIndex]?.path;
     if (explicitNoteLink(anchor) && !target.fragment) {
       this.speedStop?.();
-      cancelAnimationFrame(this.centerFrame);
+      this.guidedScroll.stop();
       this.options.onMissingFootnote?.();
       return;
     }
@@ -1410,7 +1597,7 @@ class EpubReaderSession implements ReaderSession {
           (known ? destination : null));
       if (known || note) {
         this.speedStop?.();
-        cancelAnimationFrame(this.centerFrame);
+        this.guidedScroll.stop();
         const text = destination && note ? noteText(note, destination) : '';
         if (text) this.options.onFootnote?.(text);
         else this.options.onMissingFootnote?.();
@@ -1737,8 +1924,10 @@ class EpubReaderSession implements ReaderSession {
     if (this.disposed) return;
     this.disposed = true;
     this.speedStop = null;
-    this.speedSource = null;
+    this.sourceCache = null;
     this.clearSpeedRange();
+    this.clearSearchMatch();
+    this.options.host.removeEventListener('scroll', this.drawSearchMatch, true);
     this.ready = false;
     this.gate.destroy();
     this.options.signal.removeEventListener('abort', this.abort);

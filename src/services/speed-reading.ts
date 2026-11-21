@@ -114,6 +114,14 @@ export class SpeedReadingService {
         ended: this.scheduler?.ended ?? false,
       });
   }
+  private updateGuidedScroll(): void {
+    if (this.snapshot.mode === 'guided')
+      this.reader.setSpeedScrollPlayback?.(
+        this.scheduler?.playing === true &&
+          this.snapshot.preferences.centerFocus !== false,
+        this.snapshot.preferences.wpm,
+      );
+  }
   private count(): number {
     return this.snapshot.mode === 'guided'
       ? this.snapshot.preferences.guidedWords
@@ -242,6 +250,7 @@ export class SpeedReadingService {
         },
         present: (index) => this.present(index),
         changed: () => {
+          this.updateGuidedScroll();
           this.emit();
         },
         error: (reason) => {
@@ -312,6 +321,7 @@ export class SpeedReadingService {
     const preferences = { ...this.snapshot.preferences, wpm };
     this.snapshot.preferences = preferences;
     this.scheduler?.retime(oldSpeed / wpm);
+    this.updateGuidedScroll();
     this.emit();
     const write = this.speedWrite.then(() =>
       saveSpeedPreferences(this.store, preferences),

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import {
   defaultReaderPreferences,
   type ReaderPreferences,
@@ -61,6 +61,7 @@ export function ReaderSettings({
   onClose: () => void;
   onApply: (next: ReaderPreferences) => Promise<void>;
 }) {
+  const formId = useId();
   const [draft, setDraft] = useState({ ...preferences });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,11 +70,18 @@ export function ReaderSettings({
       open
       presentation="panel"
       title="Оформление чтения"
+      className="reader-appearance"
+      footer={
+        <Button form={formId} type="submit" disabled={busy || navigationBusy}>
+          {busy ? 'Применяем…' : 'Применить оформление'}
+        </Button>
+      }
       onClose={() => {
         if (!busy) onClose();
       }}
     >
       <form
+        id={formId}
         className="form-stack reader-settings"
         onSubmit={(event) => {
           event.preventDefault();
@@ -228,9 +236,6 @@ export function ReaderSettings({
           }}
         >
           Стандартное оформление
-        </Button>
-        <Button type="submit" disabled={busy || navigationBusy}>
-          {busy ? 'Применяем…' : 'Применить оформление'}
         </Button>
       </form>
     </Dialog>

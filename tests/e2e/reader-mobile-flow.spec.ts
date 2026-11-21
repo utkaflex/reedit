@@ -102,7 +102,9 @@ for (const [width, version] of [
     await expect(origin).toBeInViewport();
     await tapCenter();
     await expect(appearance).toBeEnabled();
-    await expect(page.locator('.reader-chapter')).toHaveText('У дома');
+    await expect(
+      page.getByRole('button', { name: /^Страница 1 из \d+$/u }),
+    ).toHaveAttribute('title', 'У дома');
     await page.screenshot({
       path: test.info().outputPath('reader.png'),
       scale: 'css',

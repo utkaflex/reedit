@@ -43,6 +43,7 @@ export function validReaderPreferences(value: ReaderPreferences): boolean {
 }
 export interface ReaderLocation {
   visible?: { start: ReadingCursor; end: ReadingCursor };
+  page?: { number: number; total: number };
   cursor?: ReadingCursor;
   cfi: string;
   path: string;
@@ -61,6 +62,13 @@ export interface ReaderSelection {
   cfi: string;
   quote: string;
 }
+export interface ReaderSearchMatch {
+  spineIndex: number;
+  start: number;
+  end: number;
+  chapter: string;
+  text: string;
+}
 export interface ReaderSession {
   getTextIndex?(): DocumentTextIndex | null;
   getSpeedDocument(): Promise<SpeedDocument>;
@@ -73,6 +81,7 @@ export interface ReaderSession {
   clearSpeedRange(): void;
   flashCursor(cursor: ReadingCursor): Promise<void>;
   setSpeedCentering?(enabled: boolean): Promise<void>;
+  setSpeedScrollPlayback?(playing: boolean, wpm: number): void;
   setSpeedInteraction(onStop: (() => void) | null): void;
   getSelection(): ReaderSelection | null;
   getBookmark(): ReaderSelection | null;
@@ -81,6 +90,10 @@ export interface ReaderSession {
   getCursor(): ReadingCursor | null;
   getSelectionCursor(): ReadingCursor | null;
   goToCursor(cursor: ReadingCursor): Promise<boolean>;
+  searchText(query: string, signal: AbortSignal): Promise<ReaderSearchMatch[]>;
+  goToSearchMatch(match: ReaderSearchMatch): Promise<boolean>;
+  clearSearchMatch(): void;
+  goToPage(number: number): Promise<boolean>;
   next(): Promise<boolean>;
   previous(): Promise<boolean>;
   goTo(target: ReaderTarget): Promise<boolean>;
@@ -128,16 +141,20 @@ export function readerGesture(input: {
   if (
     input.selected ||
     input.interactive ||
-    input.duration > 350 ||
     input.x < 20 ||
     input.x > input.width - 20
   )
     return 'none';
   const dx = input.endX - input.x;
   const dy = input.endY - input.y;
-  if (Math.abs(dx) >= 48 && Math.abs(dx) > Math.abs(dy) * 1.5)
+  if (
+    input.duration <= 1000 &&
+    Math.abs(dx) >= 48 &&
+    Math.abs(dx) > Math.abs(dy) * 1.5
+  )
     return dx < 0 !== input.rtl ? 'next' : 'previous';
-  if (Math.abs(dx) > 10 || Math.abs(dy) > 10) return 'none';
+  if (input.duration > 350 || Math.abs(dx) > 10 || Math.abs(dy) > 10)
+    return 'none';
   if (input.mode === 'paginated' && input.x < input.width * 0.22)
     return input.rtl ? 'next' : 'previous';
   if (input.mode === 'paginated' && input.x > input.width * 0.78)

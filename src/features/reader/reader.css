@@ -581,6 +581,20 @@
   grid-area: 1 / 1;
   margin-bottom: 5px;
   height: 2px;
+  pointer-events: none;
+}
+.reader-progress-row .reader-page-button {
+  min-height: 44px;
+  padding: 4px 8px;
+  font-size: 0.8125rem;
+  text-align: left;
+}
+.reader-appearance .dialog__footer {
+  margin-top: 8px;
+  padding-top: 8px;
+}
+.reader-appearance .dialog__footer .button {
+  width: 100%;
 }
 .reader-footer-content .reader-actions {
   grid-area: 1 / 2;
@@ -657,4 +671,94 @@
 }
 .reader-all-sections {
   margin-top: 8px;
+}
+.reader-top .reader-search-navigation {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+@media (max-width: 359px) {
+  .reader-top {
+    gap: 2px;
+  }
+}
+.reader-search-navigation .button[aria-haspopup='dialog'] {
+  min-width: 0;
+  font-size: 0.875rem;
+}
+.reader-screen .reader-search[open] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.reader-search .dialog__header,
+.reader-search .field {
+  flex: none;
+}
+.reader-search .dialog__body {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.reader-search input {
+  min-height: 44px;
+  font-size: 1rem;
+}
+.reader-search-status {
+  color: var(--color-muted);
+  margin-block: 8px 4px;
+  font-size: var(--text-sm);
+}
+.reader-search-results {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+  padding: 2px;
+}
+.reader-search-results ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.reader-search-results li + li {
+  border-top: 1px solid var(--color-border);
+}
+.reader-search-results li .button {
+  width: 100%;
+  display: grid;
+  justify-items: start;
+  gap: 3px;
+  padding: 8px;
+  text-align: left;
+  color: var(--color-text);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.reader-search-results .button[aria-current='location'] {
+  background: var(--color-subtle);
+}
+.reader-search-chapter {
+  color: var(--color-accent);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.reader-search-results mark {
+  background: var(--color-accent-soft);
+  color: inherit;
+  font-weight: 650;
+}
+.reader-search-highlight {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 2;
+}
+.reader-search-highlight span {
+  position: absolute;
+  border-radius: 3px;
+  background: color-mix(in srgb, #d28b29 32%, transparent);
+  box-shadow: inset 0 -2px color-mix(in srgb, #c17a20 65%, transparent);
 }

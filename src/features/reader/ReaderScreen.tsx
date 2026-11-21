@@ -10,6 +10,7 @@ import {
   defaultReaderPreferences,
   type ReaderLocation,
   type ReaderPreferences,
+  type ReaderSearchMatch,
   type ReaderSession,
   type ReaderTarget,
 } from '../../domain/reader';
@@ -24,6 +25,9 @@ import { Dialog } from '../../ui/Dialog';
 import { Icon } from '../../ui/Icon';
 import { ReaderSettings } from './ReaderSettings';
 import { ReaderContents } from './ReaderContents';
+import { ReaderPageJump } from './ReaderPageJump';
+import { ReaderSearch } from './ReaderSearch';
+import { useReaderSearch } from './useReaderSearch';
 import './reader.css';
 import { useReadingActivity } from './useReadingActivity';
 
@@ -92,7 +96,14 @@ export function ReaderScreen({
   }, [missingFootnote]);
   const [gestureHint, setGestureHint] = useState(false);
   const [controls, setControls] = useState(true);
-  const [panel, setPanel] = useState<'settings' | 'contents' | null>(null);
+  const [panel, setPanel] = useState<
+    'settings' | 'contents' | 'page' | 'search' | null
+  >(null);
+  const search = useReaderSearch(state === 'ready' ? readerInstance : null);
+  const [searchPreview, setSearchPreview] = useState<{
+    matches: ReaderSearchMatch[];
+    number: number;
+  } | null>(null);
   const [retry, setRetry] = useState(0);
   const [fromStart, setFromStart] = useState(false);
   const [selection, setSelection] = useState<ReaderSelection | null>(null);
@@ -117,14 +128,17 @@ export function ReaderScreen({
     },
     [clearSelection],
   );
-  const previewTarget = useCallback(
-    (target: ReaderTarget, origin: ReaderLocation | null) => {
+  const previewLocation = useCallback(
+    (
+      navigate: (reader: ReaderSession) => Promise<boolean>,
+      origin: ReaderLocation | null,
+    ) => {
       command(async (reader) => {
         const firstPreview = !chapterOrigin.current && origin !== null;
         if (firstPreview) chapterOrigin.current = origin;
         let moved = false;
         try {
-          moved = await reader.goTo(target);
+          moved = await navigate(reader);
           if (moved && chapterOrigin.current) {
             setChapterPreview(true);
             setControls(true);
@@ -136,6 +150,17 @@ export function ReaderScreen({
       });
     },
     [command],
+  );
+  const previewTarget = useCallback(
+    (target: ReaderTarget, origin: ReaderLocation | null) => {
+      previewLocation(async (reader) => {
+        if (!(await reader.goTo(target))) return false;
+        reader.clearSearchMatch();
+        setSearchPreview(null);
+        return true;
+      }, origin);
+    },
+    [previewLocation],
   );
   const [notesPanel, setNotesPanel] = useState<'saved' | 'bookmark' | null>(
     null,
@@ -450,8 +475,20 @@ export function ReaderScreen({
     if (!location) return;
     chapterOrigin.current = null;
     setChapterPreview(false);
+    setSearchPreview(null);
+    session.current?.clearSearchMatch();
     writer.current?.push(location);
     setPanel(null);
+  };
+  const openSearchMatch = (matches: ReaderSearchMatch[], number: number) => {
+    const match = matches[number];
+    if (!match) return;
+    setPanel(null);
+    previewLocation(async (reader) => {
+      if (!(await reader.goToSearchMatch(match))) return false;
+      setSearchPreview({ matches, number });
+      return true;
+    }, location);
   };
   const close = async () => {
     try {
@@ -533,62 +570,123 @@ export function ReaderScreen({
             >
               <Icon name="back" />
             </Button>
-            <h1 title={title}>{title}</h1>
-            <Button
-              variant="quiet"
-              aria-label="Цитаты и закладки"
-              disabled={state !== 'ready' || busy}
-              onPointerDown={() => {
-                const value = session.current?.getSelection();
-                if (value) {
-                  selectedFragment.current = value;
-                  setSelection(value);
-                }
-              }}
-              onTouchEnd={(event) => {
-                // iOS can consume the compatibility click while dismissing its
-                // selection menu. Finish the touch directly, without a ghost click.
-                event.preventDefault();
-                quoteTouchAt.current = performance.now();
-                openQuotes();
-              }}
-              onClick={() => {
-                if (performance.now() - quoteTouchAt.current > 700)
-                  openQuotes();
-              }}
-            >
-              <Icon name="quote" />
-            </Button>
-            <Button
-              variant="quiet"
-              aria-label="Добавить закладку"
-              disabled={state !== 'ready' || busy}
-              onClick={() => {
-                setNotesPanel('bookmark');
-              }}
-            >
-              <Icon name="bookmark" />
-            </Button>
-            <Button
-              variant="quiet"
-              disabled={state !== 'ready' || busy}
-              aria-label="Оглавление"
-              onClick={() => {
-                setPanel('contents');
-              }}
-            >
-              <Icon name="contents" />
-            </Button>
-            <Button
-              variant="quiet"
-              disabled={state !== 'ready' || busy}
-              aria-label="Оформление чтения"
-              onClick={() => {
-                setPanel('settings');
-              }}
-            >
-              Aa
-            </Button>
+            {searchPreview ? (
+              <nav
+                className="reader-search-navigation"
+                aria-label="Совпадения в книге"
+              >
+                <Button
+                  variant="quiet"
+                  aria-label="Предыдущее совпадение"
+                  disabled={busy || searchPreview.number === 0}
+                  onClick={() => {
+                    openSearchMatch(
+                      searchPreview.matches,
+                      searchPreview.number - 1,
+                    );
+                  }}
+                >
+                  <Icon name="previous" />
+                </Button>
+                <Button
+                  variant="quiet"
+                  aria-haspopup="dialog"
+                  onClick={() => {
+                    setPanel('search');
+                  }}
+                >
+                  Результаты · {searchPreview.number + 1} из{' '}
+                  {searchPreview.matches.length}
+                </Button>
+                <Button
+                  variant="quiet"
+                  aria-label="Следующее совпадение"
+                  disabled={
+                    busy ||
+                    searchPreview.number === searchPreview.matches.length - 1
+                  }
+                  onClick={() => {
+                    openSearchMatch(
+                      searchPreview.matches,
+                      searchPreview.number + 1,
+                    );
+                  }}
+                >
+                  <Icon name="next" />
+                </Button>
+              </nav>
+            ) : (
+              <>
+                <h1 title={title}>{title}</h1>
+                <Button
+                  variant="quiet"
+                  className="icon-button"
+                  aria-label="Поиск по книге"
+                  aria-haspopup="dialog"
+                  disabled={state !== 'ready' || busy}
+                  onClick={() => {
+                    setPanel('search');
+                  }}
+                >
+                  <Icon name="search" />
+                </Button>
+                <Button
+                  variant="quiet"
+                  aria-label="Цитаты и закладки"
+                  disabled={state !== 'ready' || busy}
+                  onPointerDown={() => {
+                    const value = session.current?.getSelection();
+                    if (value) {
+                      selectedFragment.current = value;
+                      setSelection(value);
+                    }
+                  }}
+                  onTouchEnd={(event) => {
+                    // iOS can consume the compatibility click while dismissing its
+                    // selection menu. Finish the touch directly, without a ghost click.
+                    event.preventDefault();
+                    quoteTouchAt.current = performance.now();
+                    openQuotes();
+                  }}
+                  onClick={() => {
+                    if (performance.now() - quoteTouchAt.current > 700)
+                      openQuotes();
+                  }}
+                >
+                  <Icon name="quote" />
+                </Button>
+                <Button
+                  variant="quiet"
+                  aria-label="Добавить закладку"
+                  disabled={state !== 'ready' || busy}
+                  onClick={() => {
+                    setNotesPanel('bookmark');
+                  }}
+                >
+                  <Icon name="bookmark" />
+                </Button>
+                <Button
+                  variant="quiet"
+                  disabled={state !== 'ready' || busy}
+                  aria-label="Оглавление"
+                  onClick={() => {
+                    setPanel('contents');
+                  }}
+                >
+                  <Icon name="contents" />
+                </Button>
+                <Button
+                  variant="quiet"
+                  disabled={state !== 'ready' || busy}
+                  aria-label="Оформление чтения"
+                  onClick={() => {
+                    setPanel('settings');
+                  }}
+                >
+                  Aa
+                </Button>
+              </>
+            )}
           </>
         )}
       </header>
@@ -691,9 +789,24 @@ export function ReaderScreen({
               className={`reader-footer-content ${controls && !notice ? '' : 'reader-chrome-hidden'}`}
             >
               <div className="reader-progress-row">
-                <span className="reader-chapter" title={location?.chapter}>
-                  {location?.chapter ?? 'Подготовка'}
-                </span>
+                {preferences.mode === 'paginated' && location?.page ? (
+                  <Button
+                    variant="quiet"
+                    className="reader-page-button"
+                    aria-haspopup="dialog"
+                    title={location.chapter || undefined}
+                    disabled={busy}
+                    onClick={() => {
+                      setPanel('page');
+                    }}
+                  >
+                    Страница {location.page.number} из {location.page.total}
+                  </Button>
+                ) : (
+                  <span className="reader-chapter" title={location?.chapter}>
+                    {location?.chapter ?? 'Подготовка'}
+                  </span>
+                )}
                 <span
                   aria-label="Позиция в читаемом тексте"
                   title="Прогресс до якоря видимого фрагмента, по текстовому объёму"
@@ -721,6 +834,8 @@ export function ReaderScreen({
                         if (restored) {
                           chapterOrigin.current = null;
                           setChapterPreview(false);
+                          setSearchPreview(null);
+                          reader.clearSearchMatch();
                           writer.current?.push(origin);
                         }
                         return restored;
@@ -749,15 +864,17 @@ export function ReaderScreen({
                     Тап по центру скрывает панели
                   </span>
                 )}
-                <Button
-                  variant="quiet"
-                  disabled={state !== 'ready' || busy}
-                  onClick={() => {
-                    setSpeedChooser(true);
-                  }}
-                >
-                  Режимы
-                </Button>
+                {!searchPreview && (
+                  <Button
+                    variant="quiet"
+                    disabled={state !== 'ready' || busy}
+                    onClick={() => {
+                      setSpeedChooser(true);
+                    }}
+                  >
+                    Режимы
+                  </Button>
+                )}
               </div>
             </div>
             {notice && (
@@ -887,6 +1004,36 @@ export function ReaderScreen({
             setPanel(null);
           }}
           onApply={apply}
+        />
+      )}
+      {panel === 'search' && (
+        <ReaderSearch
+          search={search}
+          busy={busy}
+          active={
+            searchPreview?.matches === search.matches
+              ? searchPreview.number
+              : undefined
+          }
+          onClose={() => {
+            setPanel(null);
+          }}
+          onNavigate={(number) => {
+            openSearchMatch(search.matches, number);
+          }}
+        />
+      )}
+      {panel === 'page' && location?.page && (
+        <ReaderPageJump
+          chapter={location.chapter}
+          page={location.page}
+          busy={busy}
+          onClose={() => {
+            setPanel(null);
+          }}
+          onJump={(number) =>
+            session.current?.goToPage(number) ?? Promise.resolve(false)
+          }
         />
       )}
       {panel === 'contents' && index && (
