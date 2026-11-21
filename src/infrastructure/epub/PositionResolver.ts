@@ -64,6 +64,8 @@ export class PositionResolver {
       (entry) => entry.spineIndex === spineIndex,
     );
     if (!section) throw new Error('Раздел отсутствует в читаемом spine.');
+    if (!section.text.length)
+      return cursorAt(this.index, spineIndex, 0, anchor);
     const doc = range.startContainer.ownerDocument;
     if (!doc) throw new Error('Диапазон не принадлежит документу EPUB.');
     const start = range.cloneRange();

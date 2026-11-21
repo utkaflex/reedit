@@ -65,6 +65,12 @@ for (const format of ['epub', 'fb2'] as const) {
     await expect(appearance).toBeEnabled();
     const host = page.getByTestId('reader-host');
     const surface = host.locator('.epub-container');
+    const pageButton = page.getByRole('button', {
+      name: /^Страница \d+ из \d+$/u,
+    });
+    await expect(pageButton).toBeVisible();
+    const readPage = async () =>
+      Number((await pageButton.innerText()).split(' ')[1]);
     const bounds = await host.boundingBox();
     if (!bounds) throw new Error('Область чтения не отображается');
     const middle = {
@@ -119,6 +125,9 @@ for (const format of ['epub', 'fb2'] as const) {
     await swipe('x', -160, true);
     await expect(startOfSecond).toBeVisible();
     await expect.poll(() => inViewport(startOfSecond)).toBe(true);
+    await expect(pageButton).toBeEnabled();
+    const secondStart = await readPage();
+    expect(secondStart).toBeGreaterThan(1);
     await expect(appearance).toBeEnabled();
     await swipe('x', 160);
     await expect(endOfFirst).toBeVisible();
@@ -197,38 +206,38 @@ for (const format of ['epub', 'fb2'] as const) {
     await expect(progress).toHaveAttribute('value', saved ?? '');
     await expect.poll(() => inViewport(paragraph)).toBe(true);
 
-    const pageButton = page.getByRole('button', {
-      name: /^Страница \d+ из \d+$/u,
-    });
     await expect(pageButton).toBeVisible();
     const total = async () =>
       Number((await pageButton.innerText()).split(' ').at(-1));
     const jump = async (number: number) => {
       await pageButton.click();
-      await expect(page.getByText(/^Страницы текущего раздела/u)).toBeVisible();
+      await expect(page.getByText(/^Страницы всей книги/u)).toBeVisible();
       await page.getByLabel('Номер страницы').fill(String(number));
       await page.getByRole('button', { name: 'Перейти', exact: true }).click();
       await expect(pageButton).toHaveText(
         new RegExp(`^Страница ${String(number)} из `, 'u'),
       );
     };
-    const secondTotal = await total();
-    expect(secondTotal).toBeGreaterThan(2);
-    await jump(1);
+    const bookTotal = await total();
+    expect(bookTotal).toBeGreaterThan(secondStart);
+    await jump(secondStart);
     await expect.poll(() => inViewport(startOfSecond)).toBe(true);
     await swipe('x', 160);
     await expect.poll(() => inViewport(endOfFirst)).toBe(true);
     await expect(pageButton).toBeEnabled();
-    const firstTotal = await total();
     await expect(pageButton).toHaveText(
-      `Страница ${String(firstTotal)} из ${String(firstTotal)}`,
+      `Страница ${String(secondStart - 1)} из ${String(bookTotal)}`,
     );
     await swipe('x', -160);
-    await expect(pageButton).toHaveText(`Страница 1 из ${String(secondTotal)}`);
+    await expect(pageButton).toHaveText(
+      `Страница ${String(secondStart)} из ${String(bookTotal)}`,
+    );
     await expect(pageButton).toBeEnabled();
     await swipe('x', -160);
-    await expect(pageButton).toHaveText(`Страница 2 из ${String(secondTotal)}`);
-    await jump(3);
+    await expect(pageButton).toHaveText(
+      `Страница ${String(secondStart + 1)} из ${String(bookTotal)}`,
+    );
+    await jump(secondStart + 2);
     const paginatedPosition = await progress.getAttribute('value');
 
     await appearance.click();
@@ -238,7 +247,7 @@ for (const format of ['epub', 'fb2'] as const) {
     await page.getByRole('button', { name: 'Применить оформление' }).click();
     await expect(appearance).toBeEnabled();
     await expect(progress).toHaveAttribute('value', paginatedPosition ?? '');
-    await expect.poll(total).toBeGreaterThan(secondTotal);
+    await expect.poll(total).toBeGreaterThan(bookTotal);
 
     const portraitPageCount = await total();
     await page.setViewportSize({ width: 780, height: width });
@@ -248,6 +257,17 @@ for (const format of ['epub', 'fb2'] as const) {
     await expect.poll(total).toBe(portraitPageCount);
     await expect(progress).toHaveAttribute('value', paginatedPosition ?? '');
 
+    await appearance.click();
+    const widerMargins = page.getByRole('button', { name: 'Увеличить: поля' });
+    for (let step = 0; step < 6; step++) await widerMargins.click();
+    await page.getByRole('button', { name: 'Применить оформление' }).click();
+    await expect(last.locator('body')).toHaveCSS('padding-left', '48px');
+    await expect(pageButton).toBeEnabled();
+    await expect(progress).toHaveAttribute('value', paginatedPosition ?? '');
+    const secondChapterPages = await surface.evaluate((el) =>
+      Math.ceil(el.scrollWidth / el.clientWidth),
+    );
+
     const targetPage = await pageButton.innerText();
     await page.getByRole('button', { name: 'Закрыть книгу' }).click();
     await page
@@ -255,6 +275,11 @@ for (const format of ['epub', 'fb2'] as const) {
       .click();
     await expect(pageButton).toHaveText(targetPage);
     await expect(progress).toHaveAttribute('value', paginatedPosition ?? '');
+    await jump(1);
+    const firstChapterPages = await surface.evaluate((el) =>
+      Math.ceil(el.scrollWidth / el.clientWidth),
+    );
+    expect(await total()).toBe(firstChapterPages + secondChapterPages);
     expect(errors).toEqual([]);
   });
 }

@@ -9,7 +9,7 @@ import type { SpeedDocument } from '../../domain/speed-reading';
 import Book from 'epubjs/lib/book.js';
 import EpubCFI from 'epubjs/lib/epubcfi.js';
 import type Rendition from 'epubjs/types/rendition';
-import type { Location } from 'epubjs/types/rendition';
+import type { Location, RenditionOptions } from 'epubjs/types/rendition';
 import type Contents from 'epubjs/types/contents';
 import type { EpubAdapter } from '../../domain/epub';
 import { checkImportCancelled } from '../../domain/epub';
@@ -44,6 +44,7 @@ import {
 import { prepareTextDocument } from './text-dom';
 import { PositionResolver } from './PositionResolver';
 import { GuidedScroll } from './GuidedScroll';
+import { measureBookPages, viewportPages, type PageRun } from './book-pages';
 import {
   cursorAt,
   cursorSection,
@@ -152,6 +153,8 @@ class EpubReaderSession implements ReaderSession {
   private muted = true;
   private latest: Location | null = null;
   private lastConfirmed: ReaderLocation | null = null;
+  private pageRuns: PageRun[] | null = null;
+  private pageCountJob: AbortController | null = null;
   private preferences: ReaderPreferences;
   private buffer: ArrayBuffer | null = null;
   private textIndex: DocumentTextIndex | null = null;
@@ -275,6 +278,7 @@ class EpubReaderSession implements ReaderSession {
       this.ready = true;
       this.diagnostics.mark('ready', 'success');
       this.observeResize();
+      this.countPages();
       return this;
     } catch (error) {
       this.diagnostics.mark(
@@ -501,23 +505,7 @@ class EpubReaderSession implements ReaderSession {
     this.ensureAlive();
     const { width, height } = this.measure();
     this.size = { width, height };
-    const rendition = book.renderTo(this.options.host, {
-      width,
-      height,
-      manager: this.preferences.mode === 'scroll' ? 'continuous' : 'default',
-      offset: height,
-      method: 'blobUrl',
-      flow:
-        this.preferences.mode === 'paginated'
-          ? 'paginated'
-          : 'scrolled-continuous',
-      spread: 'none',
-      gap: this.preferences.margin * 2,
-      allowScriptedContent: false,
-      allowPopups: false,
-      snap: false,
-      resizeOnOrientationChange: false,
-    });
+    const rendition = book.renderTo(this.options.host, this.renditionOptions());
     this.rendition = rendition;
     this.frameObserver = new MutationObserver(() => {
       this.pruneContents();
@@ -546,6 +534,87 @@ class EpubReaderSession implements ReaderSession {
     });
     await this.diagnostics.measure('renderer-started', () => rendition.started);
     this.ensureAlive();
+  }
+  private renditionOptions(): RenditionOptions {
+    const scroll = this.preferences.mode === 'scroll';
+    return {
+      ...this.size,
+      manager: scroll ? 'continuous' : 'default',
+      offset: this.size.height,
+      method: 'blobUrl',
+      flow: scroll ? 'scrolled-continuous' : 'paginated',
+      spread: 'none',
+      gap: this.preferences.margin * 2,
+      allowScriptedContent: false,
+      allowPopups: false,
+      snap: false,
+      resizeOnOrientationChange: false,
+    };
+  }
+  private stopPageCount(): void {
+    this.pageCountJob?.abort();
+    this.pageCountJob = null;
+    this.pageRuns = null;
+  }
+  private viewport() {
+    return this.options.host.querySelector<HTMLElement>('.epub-container');
+  }
+  private bookPage(spineIndex: number): ReaderLocation['page'] {
+    const current = this.pageRuns?.find((run) => run.spineIndex === spineIndex);
+    const last = this.pageRuns?.at(-1);
+    const viewport = this.viewport();
+    if (!current || !last || !viewport) return undefined;
+    const { number } = viewportPages(viewport);
+    return {
+      number: current.first + Math.min(current.count, number) - 1,
+      total: last.first + last.count - 1,
+    };
+  }
+  private updateBookCounter(): void {
+    const current = this.lastConfirmed;
+    if (
+      !current ||
+      this.gate.busy ||
+      this.latest?.start.index !== current.spineIndex
+    )
+      return;
+    const page = this.bookPage(current.spineIndex);
+    if (
+      !page ||
+      (current.page?.number === page.number &&
+        current.page.total === page.total)
+    )
+      return;
+    this.lastConfirmed = { ...current, page };
+    this.options.onLocation(this.lastConfirmed);
+  }
+  private countPages(): void {
+    if (this.preferences.mode !== 'paginated' || !this.book || !this.textIndex)
+      return;
+    const job = new AbortController();
+    this.pageCountJob = job;
+    this.operations++;
+    void measureBookPages(
+      this.book,
+      this.textIndex.sections.map(({ spineIndex }) => spineIndex),
+      this.renditionOptions(),
+      (contents) => {
+        this.styleContent(contents);
+      },
+      job.signal,
+    )
+      .then((runs) => {
+        if (job.signal.aborted || this.disposed) return;
+        this.pageRuns = runs;
+        this.updateBookCounter();
+      })
+      .catch(() => {
+        // Page turns and text-based progress remain available if a chapter cannot be measured.
+      })
+      .finally(() => {
+        if (this.pageCountJob === job) this.pageCountJob = null;
+        this.endOperation();
+      });
   }
   private measure() {
     return {
@@ -589,6 +658,7 @@ class EpubReaderSession implements ReaderSession {
     for (const image of contents.document.querySelectorAll<
       HTMLElement | SVGElement
     >('img,svg,video')) {
+      image.setAttribute('draggable', 'false');
       image.style.setProperty(
         'max-width',
         `${String(Math.max(1, this.measure().width - this.preferences.margin * 2))}px`,
@@ -683,9 +753,8 @@ class EpubReaderSession implements ReaderSession {
       atStart: location.atStart,
       atEnd: location.atEnd,
     };
-    const { page, total } = location.start.displayed;
-    if (this.preferences.mode === 'paginated' && page >= 1 && page <= total)
-      result.page = { number: page, total };
+    const page = this.bookPage(index);
+    if (page) result.page = page;
     // Engine viewport boundaries, deliberately independent of the sticky restore cursor.
     try {
       if (location.start.index === index) {
@@ -792,6 +861,7 @@ class EpubReaderSession implements ReaderSession {
     } finally {
       if (operation.started && !this.disposed) {
         this.options.onBusy(false);
+        this.updateBookCounter();
         if (this.resizePending) {
           this.resizePending = false;
           this.scheduleResize();
@@ -801,29 +871,57 @@ class EpubReaderSession implements ReaderSession {
   }
   next() {
     this.returnCursor = null;
+    if (this.preferences.mode === 'paginated') return this.turnPage(1);
     if (this.lastConfirmed?.atEnd) return Promise.resolve(false);
     return this.command(() => this.requireRendition().next(), true);
   }
   previous() {
     this.returnCursor = null;
+    if (this.preferences.mode === 'paginated') return this.turnPage(-1);
     if (this.lastConfirmed?.atStart) return Promise.resolve(false);
     return this.command(() => this.requireRendition().prev(), true);
   }
+  private async displayPage(spineIndex: number, page: number): Promise<void> {
+    if (spineIndex !== this.latest?.start.index) {
+      const section = this.book?.spine.get(spineIndex);
+      if (!section) throw new Error('Раздел книги недоступен.');
+      await this.display(section.href);
+    }
+    const viewport = this.viewport();
+    if (!viewport) throw new Error('Страница ещё не готова.');
+    const pages = viewportPages(viewport);
+    pages.move(Math.min(page, pages.count));
+  }
+  private turnPage(direction: -1 | 1): Promise<boolean> {
+    const viewport = this.viewport();
+    const spineIndex = this.latest?.start.index;
+    if (!viewport || spineIndex === undefined) return Promise.resolve(false);
+    const { number, count } = viewportPages(viewport);
+    const destination = number + direction;
+    if (destination >= 1 && destination <= count)
+      return this.command(
+        () => this.displayPage(spineIndex, destination),
+        true,
+      );
+    const section = this.book?.spine.get(spineIndex);
+    const adjacent = direction === 1 ? section?.next() : section?.prev();
+    if (!adjacent) return Promise.resolve(false);
+    return this.command(
+      () => this.displayPage(adjacent.index, direction === 1 ? 1 : Infinity),
+      true,
+    );
+  }
   goToPage(number: number) {
-    const page = this.lastConfirmed?.page;
-    if (!page || !Number.isInteger(number) || number < 1 || number > page.total)
-      return Promise.reject(new Error('Такой страницы в текущем разделе нет.'));
-    if (number === page.number) return Promise.resolve(true);
-    return this.command(() => {
-      const viewport =
-        this.options.host.querySelector<HTMLElement>('.epub-container');
-      if (!viewport)
-        return Promise.reject(new Error('Страница ещё не готова.'));
-      // With spreads disabled, epub.js advances by one viewport width.
-      const direction = getComputedStyle(viewport).direction === 'rtl' ? -1 : 1;
+    const run = this.pageRuns?.find(
+      ({ first, count }) => number >= first && number < first + count,
+    );
+    if (!run || !Number.isInteger(number))
+      return Promise.reject(new Error('Такой страницы в книге нет.'));
+    if (number === this.lastConfirmed?.page?.number)
+      return Promise.resolve(true);
+    return this.command(async () => {
       this.returnCursor = null;
-      viewport.scrollLeft = direction * (number - 1) * viewport.clientWidth;
-      return Promise.resolve();
+      await this.displayPage(run.spineIndex, number - run.first + 1);
     });
   }
   setSpeedInteraction(onStop: (() => void) | null): void {
@@ -1462,6 +1560,7 @@ class EpubReaderSession implements ReaderSession {
     const anchor = this.lastConfirmed;
     return this.command(
       async () => {
+        this.stopPageCount();
         const rebuild =
           preferences.mode !== this.preferences.mode ||
           preferences.margin !== this.preferences.margin;
@@ -1482,7 +1581,10 @@ class EpubReaderSession implements ReaderSession {
       false,
       undefined,
       anchor?.cursor,
-    );
+    ).then((applied) => {
+      if (applied) this.countPages();
+      return applied;
+    });
   }
   private scheduleResize() {
     if (this.resizeTimer) clearTimeout(this.resizeTimer);
@@ -1505,6 +1607,7 @@ class EpubReaderSession implements ReaderSession {
         : this.lastConfirmed?.cursor;
       void this.command(
         async () => {
+          this.stopPageCount();
           for (const contents of this.mounted.keys())
             this.styleContent(contents);
           this.requireRendition().resize(size.width, size.height);
@@ -1513,14 +1616,18 @@ class EpubReaderSession implements ReaderSession {
         false,
         undefined,
         cursor,
-      ).catch((error: unknown) => {
-        if (!this.disposed)
-          this.options.onError(
-            error instanceof Error
-              ? error.message
-              : 'Не удалось изменить размер страницы',
-          );
-      });
+      )
+        .then((resized) => {
+          if (resized) this.countPages();
+        })
+        .catch((error: unknown) => {
+          if (!this.disposed)
+            this.options.onError(
+              error instanceof Error
+                ? error.message
+                : 'Не удалось изменить размер страницы',
+            );
+        });
     }, 100);
   }
   private observeResize() {
@@ -1652,7 +1759,7 @@ class EpubReaderSession implements ReaderSession {
       )
         this.options.onSelection?.(this.getSelection());
     });
-    const point = (event: PointerEvent) => {
+    const point = (event: { clientX: number; clientY: number }) => {
       const frame = contents.window.frameElement?.getBoundingClientRect();
       const host = this.options.host.getBoundingClientRect();
       return {
@@ -1660,13 +1767,25 @@ class EpubReaderSession implements ReaderSession {
         y: event.clientY + (frame?.top ?? host.top) - host.top,
       };
     };
-    let start: {
-      x: number;
-      y: number;
-      time: number;
-      interactive: boolean;
-      selected: boolean;
-    } | null = null;
+    const startGesture = (
+      coordinates: { clientX: number; clientY: number },
+      target: EventTarget | null,
+    ) => {
+      const element =
+        target && 'nodeType' in target && target.nodeType === 1
+          ? (target as Element)
+          : null;
+      return {
+        ...point(coordinates),
+        time: performance.now(),
+        selected: Boolean(contents.window.getSelection()?.toString()),
+        interactive: Boolean(
+          element?.closest('a,button,input,textarea,select,[contenteditable]'),
+        ),
+      };
+    };
+    type GestureStart = ReturnType<typeof startGesture>;
+    let start: GestureStart | null = null;
     let multitouch = false;
     const pointers = new Set<number>();
     let tap: ReturnType<typeof setTimeout> | null = null;
@@ -1683,9 +1802,57 @@ class EpubReaderSession implements ReaderSession {
             );
         });
     };
+    const gesture = (
+      first: GestureStart,
+      last: { clientX: number; clientY: number },
+    ) => {
+      const end = point(last);
+      return readerGesture({
+        ...first,
+        endX: end.x,
+        endY: end.y,
+        duration: performance.now() - first.time,
+        width: this.options.host.clientWidth,
+        selected:
+          first.selected || Boolean(contents.window.getSelection()?.toString()),
+        mode: this.preferences.mode,
+        rtl:
+          contents.window.getComputedStyle(contents.document.body).direction ===
+          'rtl',
+      });
+    };
+    const finishGesture = (
+      first: GestureStart,
+      last: { clientX: number; clientY: number },
+      mouse = false,
+    ) => {
+      const kind = gesture(first, last);
+      if (Math.abs(point(last).x - first.x) >= 48 || mouse) {
+        perform(kind);
+        return;
+      }
+      if (kind === 'none') return;
+      const now = performance.now();
+      if (now - lastTap < 240) {
+        if (tap) clearTimeout(tap);
+        tap = null;
+        lastTap = -Infinity;
+        return;
+      }
+      lastTap = now;
+      tap = setTimeout(() => {
+        tap = null;
+        if (!contents.window.getSelection()?.toString()) perform(kind);
+      }, 220);
+    };
     doc.addEventListener(
       'pointerdown',
       (event) => {
+        if (
+          event.pointerType === 'touch' &&
+          this.preferences.mode === 'paginated'
+        )
+          return;
         pointers.add(event.pointerId);
         if (pointers.size > 1) {
           multitouch = true;
@@ -1693,28 +1860,19 @@ class EpubReaderSession implements ReaderSession {
           if (tap) clearTimeout(tap);
           return;
         }
-        const target = event.target;
-        const element =
-          target && 'nodeType' in target && target.nodeType === 1
-            ? (target as Element)
-            : null;
         if (event.button !== 0) return;
-        start = {
-          ...point(event),
-          time: performance.now(),
-          selected: Boolean(contents.window.getSelection()?.toString()),
-          interactive: Boolean(
-            element?.closest(
-              'a,button,input,textarea,select,[contenteditable]',
-            ),
-          ),
-        };
+        start = startGesture(event, event.target);
       },
       { signal: listeners.signal },
     );
     doc.addEventListener(
       'pointerup',
       (event) => {
+        if (
+          event.pointerType === 'touch' &&
+          this.preferences.mode === 'paginated'
+        )
+          return;
         pointers.delete(event.pointerId);
         const point = start;
         start = null;
@@ -1722,41 +1880,7 @@ class EpubReaderSession implements ReaderSession {
           if (!pointers.size) multitouch = false;
           return;
         }
-        if (!point) return;
-        const frame = contents.window.frameElement?.getBoundingClientRect();
-        const host = this.options.host.getBoundingClientRect();
-        const endX = event.clientX + (frame?.left ?? host.left) - host.left;
-        const endY = event.clientY + (frame?.top ?? host.top) - host.top;
-        const kind = readerGesture({
-          ...point,
-          endX,
-          endY,
-          duration: performance.now() - point.time,
-          width: this.options.host.clientWidth,
-          selected:
-            point.selected ||
-            Boolean(contents.window.getSelection()?.toString()),
-          mode: this.preferences.mode,
-          rtl:
-            contents.window.getComputedStyle(contents.document.body)
-              .direction === 'rtl',
-        });
-        if (Math.abs(endX - point.x) >= 48 || event.pointerType === 'mouse') {
-          perform(kind);
-          return;
-        }
-        const now = performance.now();
-        if (now - lastTap < 240) {
-          if (tap) clearTimeout(tap);
-          tap = null;
-          lastTap = -Infinity;
-          return;
-        }
-        lastTap = now;
-        tap = setTimeout(() => {
-          tap = null;
-          if (!contents.window.getSelection()?.toString()) perform(kind);
-        }, 220);
+        if (point) finishGesture(point, event, event.pointerType === 'mouse');
       },
       { signal: listeners.signal },
     );
@@ -1799,11 +1923,16 @@ class EpubReaderSession implements ReaderSession {
       time: number;
     } | null = null;
     let touchActivation: { anchor: Element; time: number } | null = null;
+    let pageTouch: { id: number; first: GestureStart } | null = null;
     doc.addEventListener(
       'touchstart',
       (event) => {
         const anchor = linkAt(event.target);
         const touch = event.touches.length === 1 ? event.touches[0] : undefined;
+        pageTouch =
+          touch && this.preferences.mode === 'paginated'
+            ? { id: touch.identifier, first: startGesture(touch, event.target) }
+            : null;
         noteTap =
           anchor && touch && explicitNoteLink(anchor)
             ? {
@@ -1817,11 +1946,39 @@ class EpubReaderSession implements ReaderSession {
       { passive: true, signal: listeners.signal },
     );
     doc.addEventListener(
+      'touchmove',
+      (event) => {
+        const touch = event.touches[0];
+        if (
+          !pageTouch ||
+          !touch ||
+          touch.identifier !== pageTouch.id ||
+          !event.cancelable
+        )
+          return;
+        const kind = gesture(pageTouch.first, touch);
+        if (kind === 'next' || kind === 'previous') event.preventDefault();
+      },
+      { passive: false, signal: listeners.signal },
+    );
+    doc.addEventListener(
       'touchend',
       (event) => {
         const first = noteTap;
         noteTap = null;
         const last = event.changedTouches[0];
+        const swipe = pageTouch;
+        pageTouch = null;
+        if (swipe && last?.identifier === swipe.id && !event.touches.length) {
+          const kind = gesture(swipe.first, last);
+          if (kind === 'next' || kind === 'previous') {
+            if (event.cancelable) event.preventDefault();
+            if (tap) clearTimeout(tap);
+            perform(kind);
+            return;
+          }
+          finishGesture(swipe.first, last);
+        }
         if (
           !first ||
           !last ||
@@ -1841,6 +1998,7 @@ class EpubReaderSession implements ReaderSession {
       'touchcancel',
       () => {
         noteTap = null;
+        pageTouch = null;
       },
       { signal: listeners.signal },
     );
@@ -1923,6 +2081,7 @@ class EpubReaderSession implements ReaderSession {
   destroy() {
     if (this.disposed) return;
     this.disposed = true;
+    this.stopPageCount();
     this.speedStop = null;
     this.sourceCache = null;
     this.clearSpeedRange();
