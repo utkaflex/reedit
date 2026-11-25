@@ -84,6 +84,7 @@ export interface ReaderSession {
   setSpeedScrollPlayback?(playing: boolean, wpm: number): void;
   setSpeedInteraction(onStop: (() => void) | null): void;
   getSelection(): ReaderSelection | null;
+  clearSelection?(): void;
   getBookmark(): ReaderSelection | null;
   setHighlights(annotations: Annotation[]): void;
   goToSaved(anchor: TextAnchor, quote?: string): Promise<boolean>;

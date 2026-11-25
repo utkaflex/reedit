@@ -13,12 +13,14 @@ function ReaderSpacingControl({
   canDecrease,
   canIncrease,
   onStep,
+  size = false,
 }: {
   label: string;
   value: string;
   canDecrease: boolean;
   canIncrease: boolean;
   onStep: (direction: -1 | 1) => void;
+  size?: boolean;
 }) {
   return (
     <div className="reader-spacing" role="group" aria-label={label}>
@@ -26,24 +28,34 @@ function ReaderSpacingControl({
       <div className="reader-size-control">
         <Button
           variant="secondary"
-          aria-label={`Уменьшить: ${label.toLocaleLowerCase('ru')}`}
+          aria-label={
+            size
+              ? 'Уменьшить шрифт'
+              : `Уменьшить: ${label.toLocaleLowerCase('ru')}`
+          }
           disabled={!canDecrease}
           onClick={() => {
             onStep(-1);
           }}
         >
-          −
+          {size ? 'A−' : '−'}
         </Button>
-        <output>{value}</output>
+        <output aria-label={size ? 'Текущий размер шрифта' : undefined}>
+          {value}
+        </output>
         <Button
           variant="secondary"
-          aria-label={`Увеличить: ${label.toLocaleLowerCase('ru')}`}
+          aria-label={
+            size
+              ? 'Увеличить шрифт'
+              : `Увеличить: ${label.toLocaleLowerCase('ru')}`
+          }
           disabled={!canIncrease}
           onClick={() => {
             onStep(1);
           }}
         >
-          +
+          {size ? 'A+' : '+'}
         </Button>
       </div>
     </div>
@@ -116,17 +128,6 @@ export function ReaderSettings({
               }}
             />
           </div>
-          <SegmentedControl
-            label="Режим чтения"
-            value={draft.mode}
-            options={[
-              { value: 'paginated', label: 'Страницы' },
-              { value: 'scroll', label: 'Прокрутка' },
-            ]}
-            onChange={(mode) => {
-              setDraft({ ...draft, mode });
-            }}
-          />
           <div className="reader-font-picker">
             <SegmentedControl
               label="Шрифт чтения"
@@ -140,33 +141,22 @@ export function ReaderSettings({
               }}
             />
           </div>
-          <div
-            className="reader-size-control"
-            role="group"
-            aria-label="Размер шрифта"
-          >
-            <Button
-              variant="secondary"
-              aria-label="Уменьшить шрифт"
-              disabled={draft.fontSize <= 16}
-              onClick={() => {
-                setDraft({ ...draft, fontSize: draft.fontSize - 1 });
-              }}
-            >
-              A−
-            </Button>
-            <output aria-label="Текущий размер шрифта">{draft.fontSize}</output>
-            <Button
-              variant="secondary"
-              aria-label="Увеличить шрифт"
-              disabled={draft.fontSize >= 32}
-              onClick={() => {
-                setDraft({ ...draft, fontSize: draft.fontSize + 1 });
-              }}
-            >
-              A+
-            </Button>
-          </div>
+          <ReaderSpacingControl
+            label="Размер шрифта"
+            size
+            value={String(draft.fontSize)}
+            canDecrease={draft.fontSize > 16}
+            canIncrease={draft.fontSize < 32}
+            onStep={(direction) => {
+              setDraft((current) => ({
+                ...current,
+                fontSize: Math.max(
+                  16,
+                  Math.min(32, current.fontSize + direction),
+                ),
+              }));
+            }}
+          />
           <ReaderSpacingControl
             label="Межстрочный интервал"
             value={draft.lineHeight.toLocaleString('ru')}
@@ -201,15 +191,28 @@ export function ReaderSettings({
               }));
             }}
           />
+          <div className="reader-settings-alignment">
+            <SegmentedControl
+              label="Выравнивание"
+              value={draft.alignment}
+              options={[
+                { value: 'left', label: 'Слева' },
+                { value: 'justify', label: 'По ширине' },
+              ]}
+              onChange={(alignment) => {
+                setDraft({ ...draft, alignment });
+              }}
+            />
+          </div>
           <SegmentedControl
-            label="Выравнивание"
-            value={draft.alignment}
+            label="Режим чтения"
+            value={draft.mode}
             options={[
-              { value: 'left', label: 'По левому краю' },
-              { value: 'justify', label: 'По ширине' },
+              { value: 'paginated', label: 'Страницы' },
+              { value: 'scroll', label: 'Прокрутка' },
             ]}
-            onChange={(alignment) => {
-              setDraft({ ...draft, alignment });
+            onChange={(mode) => {
+              setDraft({ ...draft, mode });
             }}
           />
           <label className="import-checkbox">

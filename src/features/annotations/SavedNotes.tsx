@@ -58,11 +58,15 @@ export function SavedNotes({
   initialBook = '',
   onNavigate,
   onChanged,
+  onReturnToText,
+  onAddBookmark,
 }: {
   store: LocalStore;
   initialBook?: string;
   onNavigate?: (item: Saved) => void;
   onChanged?: () => void;
+  onReturnToText?: () => void;
+  onAddBookmark?: () => Promise<void>;
 }) {
   const [data, setData] = useState<{
     books: Book[];
@@ -180,112 +184,138 @@ export function SavedNotes({
       className="saved-notes form-stack"
       aria-label="Сохранённые фрагменты"
     >
-      {data && (data.notes.length > 0 || data.bookmarks.length > 0) && (
-        <div className="notes-toolbar">
-          <TextField
-            label="Поиск цитат и заметок"
-            type="search"
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-            }}
-          />
-          <SegmentedControl
-            label="Показывать"
-            value={kind}
-            options={[
-              { value: 'quotes', label: 'Цитаты' },
-              { value: 'notes', label: 'Заметки' },
-              { value: 'bookmarks', label: 'Закладки' },
-            ]}
-            onChange={(value) => {
-              setKind(value);
+      {onAddBookmark && (
+        <Button
+          variant="secondary"
+          disabled={busy || !data}
+          onClick={() => {
+            void perform(async () => {
+              await onAddBookmark();
+              setKind('bookmarks');
+              setQuery('');
               setColor('');
-            }}
-          />
-          <details className="notes-filter-disclosure">
-            <summary>
-              Фильтры{book || color || after || before ? ' · применены' : ''}
-            </summary>
-            <div className="notes-filters">
-              {' '}
-              <SelectField
-                label="Книга"
-                value={book}
+              setAfter('');
+              setBefore('');
+            });
+          }}
+        >
+          <Icon name="bookmark" /> Добавить закладку
+        </Button>
+      )}
+      {data &&
+        (onReturnToText ||
+          data.notes.length > 0 ||
+          data.bookmarks.length > 0) && (
+          <div className="notes-toolbar">
+            {!onReturnToText && (
+              <TextField
+                label="Поиск цитат и заметок"
+                type="search"
+                value={query}
                 onChange={(e) => {
-                  setBook(e.target.value);
+                  setQuery(e.target.value);
                 }}
-              >
-                <option value="">Все книги</option>
-                {data.books.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.title}
-                  </option>
-                ))}
-              </SelectField>
-              {kind === 'quotes' && (
-                <SelectField
-                  label="Цвет"
-                  value={color}
-                  onChange={(e) => {
-                    setColor(e.target.value);
+              />
+            )}
+            <SegmentedControl
+              label="Показывать"
+              value={kind}
+              options={[
+                { value: 'quotes', label: 'Цитаты' },
+                { value: 'notes', label: 'Заметки' },
+                { value: 'bookmarks', label: 'Закладки' },
+              ]}
+              onChange={(value) => {
+                setKind(value);
+                setColor('');
+              }}
+            />
+            {!onReturnToText && (
+              <details className="notes-filter-disclosure">
+                <summary>
+                  Фильтры
+                  {book || color || after || before ? ' · применены' : ''}
+                </summary>
+                <div className="notes-filters">
+                  {' '}
+                  <SelectField
+                    label="Книга"
+                    value={book}
+                    onChange={(e) => {
+                      setBook(e.target.value);
+                    }}
+                  >
+                    <option value="">Все книги</option>
+                    {data.books.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.title}
+                      </option>
+                    ))}
+                  </SelectField>
+                  {kind === 'quotes' && (
+                    <SelectField
+                      label="Цвет"
+                      value={color}
+                      onChange={(e) => {
+                        setColor(e.target.value);
+                      }}
+                    >
+                      <option value="">Все цвета</option>
+                      {Object.entries(highlightColors).map(([key, item]) => (
+                        <option key={key} value={key}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </SelectField>
+                  )}
+                  <TextField
+                    label="Созданы с"
+                    type="date"
+                    value={after}
+                    onChange={(e) => {
+                      setAfter(e.target.value);
+                    }}
+                  />
+                  <TextField
+                    label="Созданы по"
+                    type="date"
+                    value={before}
+                    onChange={(e) => {
+                      setBefore(e.target.value);
+                    }}
+                  />
+                </div>
+              </details>
+            )}
+            {(query || book || color || after || before) && (
+              <div className="active-filters">
+                <span>
+                  {[
+                    query,
+                    data.books.find((b) => b.id === book)?.title,
+                    color ? highlightColors[color as HighlightColor].label : '',
+                    after,
+                    before,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+                <Button
+                  variant="quiet"
+                  onClick={() => {
+                    setQuery('');
+                    setBook('');
+                    setColor('');
+                    setAfter('');
+                    setBefore('');
                   }}
                 >
-                  <option value="">Все цвета</option>
-                  {Object.entries(highlightColors).map(([key, item]) => (
-                    <option key={key} value={key}>
-                      {item.label}
-                    </option>
-                  ))}
-                </SelectField>
-              )}
-              <TextField
-                label="Созданы с"
-                type="date"
-                value={after}
-                onChange={(e) => {
-                  setAfter(e.target.value);
-                }}
-              />
-              <TextField
-                label="Созданы по"
-                type="date"
-                value={before}
-                onChange={(e) => {
-                  setBefore(e.target.value);
-                }}
-              />
-            </div>
-          </details>
-          {(query || book || color || after || before) && (
-            <div className="active-filters">
-              <span>
-                {[
-                  query,
-                  data.books.find((b) => b.id === book)?.title,
-                  color ? highlightColors[color as HighlightColor].label : '',
-                  after,
-                  before,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </span>
-              <Button
-                variant="quiet"
-                onClick={() => {
-                  setQuery('');
-                  setBook('');
-                  setColor('');
-                  setAfter('');
-                  setBefore('');
-                }}
-              >
-                Сбросить фильтры
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
+                  Сбросить фильтры
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       {error && (
         <div role="alert">
           <p>{error}</p>
@@ -304,19 +334,35 @@ export function SavedNotes({
         <EmptyState
           icon="quote"
           title={
-            items.length
-              ? 'Нет подходящих фрагментов'
-              : 'Слова, к которым хочется вернуться'
+            onReturnToText
+              ? kind === 'bookmarks'
+                ? 'Закладок пока нет'
+                : kind === 'notes'
+                  ? 'Заметок пока нет'
+                  : 'Цитат пока нет'
+              : items.length
+                ? 'Нет подходящих фрагментов'
+                : 'Слова, к которым хочется вернуться'
           }
         >
-          <p>
-            {items.length
-              ? 'Измените условия поиска или сбросьте фильтры.'
-              : 'Выделите текст в книге, чтобы сохранить цитату. Добавьте к ней свою мысль — она останется рядом.'}
-          </p>
-          <a className="button button--secondary" href="#/library">
-            К библиотеке
-          </a>
+          {(!onReturnToText || kind !== 'bookmarks') && (
+            <p>
+              {onReturnToText
+                ? 'Выделите текст в книге, чтобы сохранить цитату.'
+                : items.length
+                  ? 'Измените условия поиска или сбросьте фильтры.'
+                  : 'Выделите текст в книге, чтобы сохранить цитату. Добавьте к ней свою мысль — она останется рядом.'}
+            </p>
+          )}
+          {onReturnToText ? (
+            <Button variant="secondary" onClick={onReturnToText}>
+              К тексту
+            </Button>
+          ) : (
+            <a className="button button--secondary" href="#/library">
+              К библиотеке
+            </a>
+          )}
         </EmptyState>
       )}
       {kind === 'quotes' && filtered.length > 0 && (

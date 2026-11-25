@@ -279,6 +279,11 @@ for (const format of ['epub', 'fb2', 'carrie'] as const) {
           .getByRole('button', { name: 'Перейти', exact: true })
           .click();
         await atPage(number);
+        const keep = page.getByRole('button', {
+          name: 'Читать отсюда',
+          exact: true,
+        });
+        if (await keep.isVisible()) await keep.click();
       };
       await jump(pageAtBoundary);
       await showStep();

@@ -217,6 +217,11 @@ for (const format of ['epub', 'fb2'] as const) {
       await expect(pageButton).toHaveText(
         new RegExp(`^Страница ${String(number)} из `, 'u'),
       );
+      const keep = page.getByRole('button', {
+        name: 'Читать отсюда',
+        exact: true,
+      });
+      if (await keep.isVisible()) await keep.click();
     };
     const bookTotal = await total();
     expect(bookTotal).toBeGreaterThan(secondStart);

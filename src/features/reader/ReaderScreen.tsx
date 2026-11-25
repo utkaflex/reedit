@@ -99,72 +99,74 @@ export function ReaderScreen({
   const [panel, setPanel] = useState<
     'settings' | 'contents' | 'page' | 'search' | null
   >(null);
+  const [pageJumpStart, setPageJumpStart] = useState<ReaderLocation['page']>();
   const search = useReaderSearch(state === 'ready' ? readerInstance : null);
   const [searchPreview, setSearchPreview] = useState<{
     matches: ReaderSearchMatch[];
     number: number;
   } | null>(null);
+  const [lastSearchMatch, setLastSearchMatch] =
+    useState<typeof searchPreview>(null);
   const [retry, setRetry] = useState(0);
   const [fromStart, setFromStart] = useState(false);
   const [selection, setSelection] = useState<ReaderSelection | null>(null);
   const selectedFragment = useRef<ReaderSelection | null>(null);
   const quoteTouchAt = useRef(-Infinity);
   const clearSelection = useCallback(() => {
+    session.current?.clearSelection?.();
     selectedFragment.current = null;
     setSelection(null);
+  }, []);
+  const reportNavigationError = useCallback((error: unknown) => {
+    setNotice(
+      error instanceof Error ? error.message : 'Не удалось перейти к странице.',
+    );
   }, []);
   const command = useCallback(
     (action: (reader: ReaderSession) => Promise<boolean>) => {
       const reader = session.current;
       if (!reader) return;
       clearSelection();
-      void action(reader).catch((error: unknown) => {
-        setNotice(
-          error instanceof Error
-            ? error.message
-            : 'Не удалось перейти к странице.',
-        );
-      });
+      void action(reader).catch(reportNavigationError);
     },
-    [clearSelection],
+    [clearSelection, reportNavigationError],
   );
   const previewLocation = useCallback(
-    (
+    async (
       navigate: (reader: ReaderSession) => Promise<boolean>,
       origin: ReaderLocation | null,
     ) => {
-      command(async (reader) => {
-        const firstPreview = !chapterOrigin.current && origin !== null;
-        if (firstPreview) chapterOrigin.current = origin;
-        let moved = false;
-        try {
-          moved = await navigate(reader);
-          if (moved && chapterOrigin.current) {
-            setChapterPreview(true);
-            setControls(true);
-          }
-          return moved;
-        } finally {
-          if (!moved && firstPreview) chapterOrigin.current = null;
+      const reader = session.current;
+      if (!reader) return false;
+      clearSelection();
+      const firstPreview = !chapterOrigin.current && origin !== null;
+      if (firstPreview) chapterOrigin.current = origin;
+      let moved = false;
+      try {
+        moved = await navigate(reader);
+        if (moved && chapterOrigin.current) {
+          setChapterPreview(true);
+          setControls(true);
         }
-      });
+        return moved;
+      } finally {
+        if (!moved && firstPreview) chapterOrigin.current = null;
+      }
     },
-    [command],
+    [clearSelection],
   );
   const previewTarget = useCallback(
     (target: ReaderTarget, origin: ReaderLocation | null) => {
-      previewLocation(async (reader) => {
+      void previewLocation(async (reader) => {
         if (!(await reader.goTo(target))) return false;
         reader.clearSearchMatch();
         setSearchPreview(null);
         return true;
-      }, origin);
+      }, origin).catch(reportNavigationError);
     },
-    [previewLocation],
+    [previewLocation, reportNavigationError],
   );
-  const [notesPanel, setNotesPanel] = useState<'saved' | 'bookmark' | null>(
-    null,
-  );
+  const [notesPanel, setNotesPanel] = useState<'saved' | null>(null);
   const openQuotes = () => {
     const value = session.current?.getSelection() ?? selectedFragment.current;
     setControls(true);
@@ -484,11 +486,13 @@ export function ReaderScreen({
     const match = matches[number];
     if (!match) return;
     setPanel(null);
-    previewLocation(async (reader) => {
+    void previewLocation(async (reader) => {
       if (!(await reader.goToSearchMatch(match))) return false;
-      setSearchPreview({ matches, number });
+      const selected = { matches, number };
+      setSearchPreview(selected);
+      setLastSearchMatch(selected);
       return true;
-    }, location);
+    }, location).catch(reportNavigationError);
   };
   const close = async () => {
     try {
@@ -657,16 +661,6 @@ export function ReaderScreen({
                 </Button>
                 <Button
                   variant="quiet"
-                  aria-label="Добавить закладку"
-                  disabled={state !== 'ready' || busy}
-                  onClick={() => {
-                    setNotesPanel('bookmark');
-                  }}
-                >
-                  <Icon name="bookmark" />
-                </Button>
-                <Button
-                  variant="quiet"
                   disabled={state !== 'ready' || busy}
                   aria-label="Оглавление"
                   onClick={() => {
@@ -786,21 +780,24 @@ export function ReaderScreen({
           <>
             <div
               inert={Boolean(selection)}
-              className={`reader-footer-content ${controls && !notice ? '' : 'reader-chrome-hidden'}`}
+              className={`reader-footer-content ${chapterPreview ? 'reader-footer-content--preview' : ''} ${controls && !notice ? '' : 'reader-chrome-hidden'}`}
             >
               <div className="reader-progress-row">
                 {preferences.mode === 'paginated' && location?.page ? (
                   <Button
-                    variant="quiet"
+                    variant="secondary"
                     className="reader-page-button"
+                    aria-description="Перейти к странице"
                     aria-haspopup="dialog"
                     title={location.chapter || undefined}
                     disabled={busy}
                     onClick={() => {
+                      setPageJumpStart(location.page);
                       setPanel('page');
                     }}
                   >
                     Страница {location.page.number} из {location.page.total}
+                    <Icon name="expand" />
                   </Button>
                 ) : (
                   <span className="reader-chapter" title={location?.chapter}>
@@ -864,7 +861,7 @@ export function ReaderScreen({
                     Тап по центру скрывает панели
                   </span>
                 )}
-                {!searchPreview && (
+                {!chapterPreview && (
                   <Button
                     variant="quiet"
                     disabled={state !== 'ready' || busy}
@@ -969,29 +966,36 @@ export function ReaderScreen({
             setSpeedChooser(false);
           }}
         >
-          <div className="form-stack">
-            <p>
-              Начнём с выбранного слова или якоря видимого фрагмента.
-              Воспроизведение запускается кнопкой «Продолжить».
-            </p>
+          <div className="reader-speed-choices">
             <Button
+              variant="secondary"
+              aria-label="По одному слову"
+              aria-describedby="reader-rsvp-description"
               onClick={() => {
                 setSpeedChooser(false);
                 clearSelection();
                 speed.run((session) => session.open('rsvp'));
               }}
             >
-              По одному слову
+              <strong>По одному слову</strong>
+              <span id="reader-rsvp-description">
+                Слова сменяют друг друга в центре экрана.
+              </span>
             </Button>
             <Button
               variant="secondary"
+              aria-label="С подсветкой текста"
+              aria-describedby="reader-guided-description"
               onClick={() => {
                 setSpeedChooser(false);
                 clearSelection();
                 speed.run((session) => session.open('guided'));
               }}
             >
-              С подсветкой текста
+              <strong>С подсветкой текста</strong>
+              <span id="reader-guided-description">
+                Видна вся страница, подсветка ведёт по строкам.
+              </span>
             </Button>
           </div>
         </Dialog>
@@ -1011,8 +1015,8 @@ export function ReaderScreen({
           search={search}
           busy={busy}
           active={
-            searchPreview?.matches === search.matches
-              ? searchPreview.number
+            lastSearchMatch?.matches === search.matches
+              ? lastSearchMatch.number
               : undefined
           }
           onClose={() => {
@@ -1023,17 +1027,23 @@ export function ReaderScreen({
           }}
         />
       )}
-      {panel === 'page' && location?.page && (
+      {panel === 'page' && pageJumpStart && location && (
         <ReaderPageJump
           chapter={location.chapter}
-          page={location.page}
-          busy={busy}
+          page={location.page ?? pageJumpStart}
+          busy={busy || !location.page}
           onClose={() => {
             setPanel(null);
           }}
-          onJump={(number) =>
-            session.current?.goToPage(number) ?? Promise.resolve(false)
-          }
+          onJump={(number) => {
+            if (number === location.page?.number) return Promise.resolve(true);
+            return previewLocation(async (reader) => {
+              if (!(await reader.goToPage(number))) return false;
+              reader.clearSearchMatch();
+              setSearchPreview(null);
+              return true;
+            }, location);
+          }}
         />
       )}
       {panel === 'contents' && index && (

@@ -3,6 +3,28 @@ import type { EpubNavItem } from '../../domain/epub';
 import { flattenNavigation, type ReaderTarget } from '../../domain/reader';
 import { Dialog } from '../../ui/Dialog';
 import { Button } from '../../ui/Button';
+
+const frontLabels = new Map([
+  ['annotation', 'Аннотация'],
+  ['abstract', 'Аннотация'],
+  ['аннотация', 'Аннотация'],
+  ['cover', 'Обложка'],
+  ['обложка', 'Обложка'],
+  ['title page', 'Титульный лист'],
+  ['титульный лист', 'Титульный лист'],
+  ['dedication', 'Посвящение'],
+  ['посвящение', 'Посвящение'],
+  ['epigraph', 'Эпиграф'],
+  ['эпиграф', 'Эпиграф'],
+  ['preface', 'Предисловие'],
+  ['foreword', 'Предисловие'],
+  ['предисловие', 'Предисловие'],
+]);
+const normalizedLabel = (label: string) =>
+  label.trim().replace(/\s+/gu, ' ').toLocaleLowerCase('ru');
+const isNotes = (item: EpubNavItem) =>
+  /^(примечания|сноски|footnotes|endnotes|notes)$/iu.test(item.label.trim());
+
 export function ReaderContents({
   index,
   currentPath,
@@ -18,10 +40,22 @@ export function ReaderContents({
   onClose: () => void;
   onNavigate: (target: ReaderTarget) => void;
 }) {
-  const isNotes = (item: EpubNavItem) =>
-    /^(примечания|сноски|footnotes|endnotes|notes)(?:\s|$)/iu.test(
-      item.label.trim(),
-    );
+  const introduction: EpubNavItem[] = [];
+  const chapters: EpubNavItem[] = [];
+  const notes: EpubNavItem[] = [];
+  const titleLabels = [
+    index.metadata.title,
+    [...index.metadata.authors, index.metadata.title].join(' '),
+  ].map(normalizedLabel);
+  let inNotes = false;
+  for (const item of index.navigation) {
+    inNotes = isNotes(item) || (inNotes && /^\d+$/u.test(item.label.trim()));
+    const label = normalizedLabel(item.label);
+    if (inNotes) notes.push(item);
+    else if (frontLabels.has(label) || (label && titleLabels.includes(label)))
+      introduction.push(item);
+    else chapters.push(item);
+  }
   const navigation = flattenNavigation(index.navigation);
   const extraSections = index.sections.filter(
     (section) =>
@@ -74,7 +108,8 @@ export function ReaderContents({
                 onNavigate(item);
               }}
             >
-              {item.label || 'Без названия'}
+              {frontLabels.get(normalizedLabel(item.label)) ??
+                (item.label || 'Без названия')}
             </Button>
             {item.children.length > 0 && list(item.children)}
           </li>,
@@ -93,7 +128,24 @@ export function ReaderContents({
         onKeepPlace && <Button onClick={onKeepPlace}>Читать отсюда</Button>
       }
     >
-      {list(index.navigation)}
+      {introduction.length > 0 && (
+        <section
+          className="reader-toc-group"
+          aria-label="Вступительные материалы"
+        >
+          <h3>Вступительные материалы</h3>
+          {list(introduction)}
+        </section>
+      )}
+      {chapters.length > 0 && (
+        <section className="reader-toc-group" aria-label="Главы">
+          {(introduction.length > 0 || notes.length > 0) && <h3>Главы</h3>}
+          {list(chapters)}
+        </section>
+      )}
+      {notes.length > 0 && (
+        <div className="reader-toc-group">{list(notes)}</div>
+      )}
       {extraSections.length > 0 && (
         <details className="reader-all-sections" open={navigation.length === 0}>
           <summary>Разделы вне оглавления ({extraSections.length})</summary>

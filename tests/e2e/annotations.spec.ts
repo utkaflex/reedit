@@ -19,9 +19,7 @@ async function open(page: Page) {
     mimeType: 'application/epub+zip',
     buffer: Buffer.from(fixture.bytes),
   });
-  await page
-    .getByRole('button', { name: 'Добавить в библиотеку' })
-    .click();
+  await page.getByRole('button', { name: 'Добавить в библиотеку' }).click();
   await page
     .getByRole('button', { name: 'Читать файл notes.epub', exact: true })
     .click();
@@ -197,13 +195,17 @@ test('цитата, комментарий, цвет, закладка, эксп
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('[ref="reedit-highlight"]')).toHaveCount(1);
   await page
-    .getByRole('button', { name: 'Добавить закладку', exact: true })
+    .getByRole('button', { name: 'Цитаты и закладки', exact: true })
     .click();
   await page
-    .getByRole('textbox', { name: 'Название закладки', exact: true })
-    .fill('Моя закладка');
+    .getByRole('button', { name: 'Добавить закладку', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Закладка', exact: true }),
+  ).toBeVisible();
   await page
-    .getByRole('button', { name: 'Сохранить закладку', exact: true })
+    .getByRole('dialog', { name: 'Цитаты и закладки книги' })
+    .getByRole('button', { name: 'Закрыть', exact: true })
     .click();
   await page.getByRole('button', { name: 'Оформление чтения' }).click();
   await page.getByRole('radio', { name: 'Тёмная', exact: true }).check();
@@ -280,7 +282,7 @@ test('цитата, комментарий, цвет, закладка, эксп
     .click();
   await page.getByRole('radio', { name: 'Закладки', exact: true }).check();
   await expect(
-    page.getByRole('heading', { name: 'Моя закладка' }),
+    page.getByRole('heading', { name: 'Закладка', exact: true }),
   ).toBeVisible();
   await page.getByLabel('Действия записи', { exact: true }).click();
   await page

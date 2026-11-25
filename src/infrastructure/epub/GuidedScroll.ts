@@ -26,7 +26,7 @@ export class GuidedScroll {
   ): void {
     if (instant) {
       this.stop();
-      if (Math.abs(container.scrollTop - target) > 6) {
+      if (Math.abs(container.scrollTop - target) > 3) {
         container.scrollTop = target;
         this.onScroll();
       }
@@ -45,14 +45,13 @@ export class GuidedScroll {
       time: performance.now(),
     };
     this.rebase(state);
-    const duration = Math.max(110, Math.min(260, 45_000 / wpm));
-    // Font metrics can shift slightly between words on the same visual line.
-    if (Math.abs(state.target - target) > 6) {
+    const duration = Math.max(85, Math.min(295, 52_000 / wpm));
+    if (Math.abs(state.target - target) > 3) {
       state.target = target;
-      // A heading or a paragraph break can span more than one line of travel.
+      // Give chapter headings and blank lines more time without changing velocity.
       state.travelDuration = Math.min(
-        320,
-        Math.abs(target - state.position) * 2.1,
+        430,
+        Math.abs(target - state.position) * 3.2,
       );
     }
     state.frequency = 6 / Math.max(duration, state.travelDuration);
@@ -75,6 +74,10 @@ export class GuidedScroll {
     const state = this.state;
     if (!state) return;
     this.frame = 0;
+    if (!state.container.isConnected) {
+      this.stop();
+      return;
+    }
     this.rebase(state);
     const { container, target, frequency } = state;
     const elapsed = Math.max(0, Math.min(32, now - state.time));

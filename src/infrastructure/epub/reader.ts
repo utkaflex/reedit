@@ -81,7 +81,7 @@ class EpubReaderSession implements ReaderSession {
   private readonly diagnostics = new ReaderDiagnostics();
   private originalSpeedMode: ReaderPreferences['mode'] | null = null;
   private readonly guidedScroll = new GuidedScroll(() => {
-    this.drawSpeedRange(false);
+    this.moveSpeedOverlay();
   });
   private speedScrollWpm: number | null = null;
   setSpeedScrollPlayback(playing: boolean, wpm: number): void {
@@ -90,8 +90,9 @@ class EpubReaderSession implements ReaderSession {
       this.guidedScroll.stop();
       return;
     }
+    if (this.speedScrollWpm === wpm) return;
     this.speedScrollWpm = wpm;
-    this.centerSpeedLine();
+    this.centerSpeedLine({ refresh: true });
   }
   async setSpeedCentering(enabled: boolean): Promise<void> {
     if (enabled === (this.originalSpeedMode !== null)) return;
@@ -111,7 +112,9 @@ class EpubReaderSession implements ReaderSession {
       )
         throw new Error('Не удалось включить прокрутку.');
       this.originalSpeedMode = mode;
+      this.options.host.setAttribute('data-guided-center', '');
     } else if (!enabled && this.originalSpeedMode !== null) {
+      this.options.host.removeAttribute('data-guided-center');
       if (
         this.preferences.mode !== this.originalSpeedMode &&
         !(await this.setPreferences({
@@ -132,6 +135,12 @@ class EpubReaderSession implements ReaderSession {
     focusEnd: ReadingCursor | null;
   } | null = null;
   private speedOverlay: HTMLDivElement | null = null;
+  private speedOverlayAnchor: {
+    frame: Element;
+    top: number;
+    shift: number;
+  } | null = null;
+  private speedLine: { frame: Element; top: number } | null = null;
   private searchRange: { start: ReadingCursor; end: ReadingCursor } | null =
     null;
   private searchOverlay: HTMLDivElement | null = null;
@@ -166,7 +175,7 @@ class EpubReaderSession implements ReaderSession {
   private motion = window.matchMedia('(prefers-reduced-motion: reduce)');
   private motionChanged = () => {
     for (const contents of this.mounted.keys()) this.styleContent(contents);
-    this.centerSpeedLine();
+    this.centerSpeedLine({ refresh: true });
   };
   private viewportResize = () => {
     if (this.ready && !this.disposed) {
@@ -623,6 +632,15 @@ class EpubReaderSession implements ReaderSession {
     };
   }
   private styleContent(contents: Contents) {
+    const root = contents.document.documentElement;
+    const language = this.options.index.metadata.language
+      .trim()
+      .replaceAll('_', '-');
+    if (!root.getAttribute('lang')?.trim()) {
+      const declared = root.getAttribute('xml:lang') || language;
+      if (/^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$/iu.test(declared))
+        root.setAttribute('lang', declared);
+    }
     const { background, text } = palette[this.preferences.theme];
     const font =
       this.preferences.font === 'serif'
@@ -1130,7 +1148,13 @@ class EpubReaderSession implements ReaderSession {
     start: ReadingCursor,
     end: ReadingCursor,
     visibleOnly = true,
-  ): { left: number; top: number; width: number; height: number }[] {
+  ): {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    localTop: number;
+  }[] {
     const content = this.contentFor(start.spineIndex);
     if (!content || !this.resolver) return [];
     const range = this.resolver.rangeBetween(start, end, content.document);
@@ -1153,16 +1177,21 @@ class EpubReaderSession implements ReaderSession {
         top: rect.top + frame.top - host.top,
         width: rect.width,
         height: rect.height,
+        localTop: rect.top,
       }));
   }
   private drawSpeedRange(animate = true): void {
     if (!this.speedRange || this.disposed) return;
+    const frame = this.contentFor(this.speedRange.start.spineIndex)?.window
+      .frameElement;
+    if (!frame) return;
     const overlay = this.speedOverlay ?? document.createElement('div');
     overlay.className = 'speed-highlight-layer';
     overlay.setAttribute('aria-hidden', 'true');
     const rects = this.visibleRangeRects(
       this.speedRange.start,
       this.speedRange.end,
+      !this.speedRange.focusEnd,
     );
     // Inline markup can yield several DOM rectangles for one line.
     const lines: typeof rects = [];
@@ -1178,24 +1207,34 @@ class EpubReaderSession implements ReaderSession {
       }
     }
     const old = Array.from(overlay.children);
+    const oldAnchor = this.speedOverlayAnchor;
+    this.speedOverlayAnchor = {
+      frame,
+      top:
+        frame.getBoundingClientRect().top -
+        this.options.host.getBoundingClientRect().top,
+      shift: 0,
+    };
+    overlay.style.transform = '';
     lines.forEach((rect, index) => {
       const previous = old[index];
       const mark =
         previous instanceof HTMLSpanElement
           ? previous
           : document.createElement('span');
-      const top = parseFloat(mark.style.top);
+      const top = parseFloat(mark.style.top) + (oldAnchor?.shift ?? 0);
       const sameLine =
-        Number.isFinite(top) && Math.abs(top - rect.top) < rect.height / 2;
+        oldAnchor?.frame === frame &&
+        Number.isFinite(top) &&
+        Math.abs(top - rect.top) < rect.height / 2;
       mark.className = 'speed-word-highlight';
-      if (animate || !previous)
-        mark.style.transition =
-          animate &&
-          sameLine &&
-          this.preferences.animations &&
-          !this.motion.matches
-            ? 'left 65ms linear, width 65ms linear'
-            : 'none';
+      mark.style.transition =
+        animate &&
+        sameLine &&
+        this.preferences.animations &&
+        !this.motion.matches
+          ? 'left 65ms linear, width 65ms linear'
+          : 'none';
       Object.assign(mark.style, {
         left: String(rect.left) + 'px',
         top: String(rect.top) + 'px',
@@ -1219,6 +1258,15 @@ class EpubReaderSession implements ReaderSession {
     });
     if (!overlay.isConnected) this.options.host.append(overlay);
     this.speedOverlay = overlay;
+  }
+  private moveSpeedOverlay(): void {
+    const anchor = this.speedOverlayAnchor;
+    if (!anchor?.frame.isConnected || !this.speedOverlay) return;
+    anchor.shift =
+      anchor.frame.getBoundingClientRect().top -
+      this.options.host.getBoundingClientRect().top -
+      anchor.top;
+    this.speedOverlay.style.transform = `translateY(${String(anchor.shift)}px)`;
   }
   async showSpeedRange(
     start: ReadingCursor,
@@ -1262,15 +1310,21 @@ class EpubReaderSession implements ReaderSession {
       focusEnd: center ? firstEnd : null,
     };
     this.drawSpeedRange();
-    this.centerSpeedLine(firstFocusedRange);
+    this.centerSpeedLine({ initial: firstFocusedRange });
   }
-  private centerSpeedLine(initial = false): void {
+  private centerSpeedLine({ initial = false, refresh = false } = {}): void {
     const range = this.speedRange;
     if (!range?.focusEnd || (!initial && this.speedScrollWpm === null)) return;
-    const container =
-      this.options.host.querySelector<HTMLElement>('.epub-container');
+    const container = this.viewport();
+    const frame = this.contentFor(range.start.spineIndex)?.window.frameElement;
     const line = this.visibleRangeRects(range.start, range.focusEnd, false)[0];
-    if (!container || !line) return;
+    if (!container || !frame || !line) return;
+    const sameLine =
+      this.speedLine?.frame === frame &&
+      Math.abs(this.speedLine.top - line.localTop) <=
+        Math.max(2, line.height / 3);
+    if (sameLine && !initial && !refresh) return;
+    this.speedLine = { frame, top: line.localTop };
     const to = Math.max(
       0,
       Math.min(
@@ -1283,7 +1337,7 @@ class EpubReaderSession implements ReaderSession {
     );
     if (initial) {
       container.scrollTop = to;
-      this.drawSpeedRange(false);
+      this.moveSpeedOverlay();
       return;
     }
     if (this.speedScrollWpm === null) return;
@@ -1299,6 +1353,8 @@ class EpubReaderSession implements ReaderSession {
     if (this.flashTimer) clearTimeout(this.flashTimer);
     this.flashTimer = null;
     this.speedRange = null;
+    this.speedLine = null;
+    this.speedOverlayAnchor = null;
     this.speedOverlay?.remove();
     this.speedOverlay = null;
   }
@@ -1368,6 +1424,10 @@ class EpubReaderSession implements ReaderSession {
     } catch {
       return null;
     }
+  }
+  clearSelection(): void {
+    for (const contents of this.mounted.keys())
+      contents.window.getSelection()?.removeAllRanges();
   }
   getBookmark(): ReaderSelection | null {
     const cursor = this.getCursor();

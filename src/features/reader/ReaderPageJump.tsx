@@ -24,6 +24,7 @@ export function ReaderPageJump({
       open
       presentation="panel"
       title="Перейти к странице"
+      className="reader-page-jump"
       onClose={onClose}
     >
       <form
@@ -50,15 +51,16 @@ export function ReaderPageJump({
             <strong>{chapter}</strong>
           </p>
         )}
-        <p>
-          Страницы всей книги, от 1 до {page.total}. Число страниц зависит от
-          оформления.
-        </p>
+        <div className="reader-page-jump__position">
+          <strong>Сейчас страница {page.number}</strong>
+          <span>Страницы всей книги · от 1 до {page.total}</span>
+        </div>
         <label className="field">
           <span>Номер страницы</span>
           <input
             type="text"
             inputMode="numeric"
+            enterKeyHint="go"
             pattern="[0-9]+"
             required
             value={value}

@@ -7,7 +7,6 @@ import { saveSelection } from '../../services/annotations';
 import { readerUrl } from '../shell/navigation';
 import { Button } from '../../ui/Button';
 import { Dialog } from '../../ui/Dialog';
-import { TextField } from '../../ui/TextField';
 import { TextArea } from '../../ui/FormControls';
 import { ColorField, SavedNotes } from './SavedNotes';
 
@@ -24,14 +23,13 @@ export function ReaderAnnotations({
   address: ReaderAddress;
   reader: ReaderSession | null;
   selection: ReaderSelection | null;
-  panel: 'saved' | 'bookmark' | null;
+  panel: 'saved' | null;
   onClose: () => void;
   onClear: () => void;
 }) {
   const [draft, setDraft] = useState<ReaderSelection | null>(null);
   const [note, setNote] = useState('');
   const [color, setColor] = useState<HighlightColor>('yellow');
-  const [label, setLabel] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   useEffect(() => {
@@ -45,7 +43,6 @@ export function ReaderAnnotations({
   }, [message]);
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
-  const bookmark = useRef<ReaderSelection | null>(null);
   const refresh = useCallback(async () => {
     const items = await store.repositories.annotations.list();
     reader?.setHighlights(
@@ -79,11 +76,25 @@ export function ReaderAnnotations({
       window.removeEventListener('focus', load);
     };
   }, [store, reader, address.bookId]);
-  useEffect(() => {
-    if (panel === 'bookmark') {
-      bookmark.current = reader?.getBookmark() ?? null;
-    }
-  }, [panel, reader]);
+  const addBookmark = async () => {
+    const value = reader?.getBookmark();
+    if (!value) throw new Error('Дождитесь загрузки позиции и повторите.');
+    const now = Date.now();
+    await store.repositories.bookmarks.save(
+      {
+        id: newId(),
+        createdAt: now,
+        updatedAt: now,
+        bookId: address.bookId,
+        bookFileId: address.fileId,
+        readingId: address.readingId,
+        cfi: value.cfi,
+        anchor: value.anchor,
+        label: 'Закладка',
+      },
+      { expectedUpdatedAt: null },
+    );
+  };
   const perform = async (action: () => Promise<void>) => {
     if (lock.current) return;
     lock.current = true;
@@ -243,63 +254,19 @@ export function ReaderAnnotations({
           </form>
         </Dialog>
       )}
-      {panel === 'bookmark' && (
+      {panel === 'saved' && (
         <Dialog
           open
-          title="Добавить закладку"
-          onClose={() => {
-            if (!busy) onClose();
-          }}
+          presentation="panel"
+          className="reader-notes"
+          title="Цитаты и закладки книги"
+          onClose={onClose}
         >
-          <form
-            className="form-stack"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void perform(async () => {
-                const value = bookmark.current;
-                if (!value)
-                  throw new Error('Дождитесь загрузки позиции и повторите.');
-                const now = Date.now();
-                await store.repositories.bookmarks.save(
-                  {
-                    id: newId(),
-                    createdAt: now,
-                    updatedAt: now,
-                    bookId: address.bookId,
-                    bookFileId: address.fileId,
-                    readingId: address.readingId,
-                    cfi: value.cfi,
-                    anchor: value.anchor,
-                    label: label.trim() || 'Закладка',
-                  },
-                  { expectedUpdatedAt: null },
-                );
-                setLabel('');
-                onClose();
-              });
-            }}
-          >
-            <TextField
-              label="Название закладки"
-              value={label}
-              onChange={(event) => {
-                setLabel(event.target.value);
-              }}
-              maxLength={200}
-              hint="Закладка сохранит якорь видимого фрагмента."
-            />
-            {error && <p role="alert">{error}</p>}
-            <Button type="submit" disabled={busy}>
-              Сохранить закладку
-            </Button>
-          </form>
-        </Dialog>
-      )}
-      {panel === 'saved' && (
-        <Dialog open title="Цитаты и закладки книги" onClose={onClose}>
           <SavedNotes
             store={store}
             initialBook={address.bookId}
+            onReturnToText={onClose}
+            onAddBookmark={addBookmark}
             onChanged={() => {
               void refresh().catch(() => {
                 setError('Не удалось обновить выделения.');

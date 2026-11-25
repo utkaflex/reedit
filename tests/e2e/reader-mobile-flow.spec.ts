@@ -149,12 +149,18 @@ for (const [width, version] of [
       page.getByText('Цитата сохранена', { exact: true }),
     ).toBeVisible();
     await page
-      .getByRole('button', { name: 'Добавить закладку', exact: true })
+      .getByRole('button', { name: 'Цитаты и закладки', exact: true })
       .click();
     await page
-      .getByRole('textbox', { name: 'Название закладки' })
-      .fill('У дома');
-    await page.getByRole('button', { name: 'Сохранить закладку' }).click();
+      .getByRole('button', { name: 'Добавить закладку', exact: true })
+      .click();
+    await expect(
+      page.getByRole('heading', { name: 'Закладка', exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole('dialog', { name: 'Цитаты и закладки книги' })
+      .getByRole('button', { name: 'Закрыть', exact: true })
+      .click();
 
     const progress = page.getByRole('progressbar', {
       name: 'Прогресс по читаемому тексту',
