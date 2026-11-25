@@ -653,8 +653,12 @@ class EpubReaderSession implements ReaderSession {
       '--reedit-note',
       this.preferences.theme === 'dark' ? '#f4aa91' : '#8f3c2c',
     );
-    contents.document.documentElement.style.touchAction = 'pan-y pinch-zoom';
-    contents.document.body.style.touchAction = 'pan-y pinch-zoom';
+    // Columns turn by command. Native single-finger panning can cancel a diagonal
+    // gesture before touchend, but pinch and text selection still belong to the browser.
+    const touchAction =
+      this.preferences.mode === 'paginated' ? 'pinch-zoom' : 'pan-y pinch-zoom';
+    contents.document.documentElement.style.touchAction = touchAction;
+    contents.document.body.style.touchAction = touchAction;
     for (const image of contents.document.querySelectorAll<
       HTMLElement | SVGElement
     >('img,svg,video')) {
@@ -1741,7 +1745,7 @@ class EpubReaderSession implements ReaderSession {
       });
     const userScroll = () => {
       if (this.speedStop) this.speedStop();
-      else this.returnCursor = null;
+      else if (this.preferences.mode === 'scroll') this.returnCursor = null;
     };
     doc.addEventListener('wheel', userScroll, {
       passive: true,
@@ -1770,13 +1774,23 @@ class EpubReaderSession implements ReaderSession {
     const startGesture = (
       coordinates: { clientX: number; clientY: number },
       target: EventTarget | null,
+      touch = false,
     ) => {
       const element =
         target && 'nodeType' in target && target.nodeType === 1
           ? (target as Element)
           : null;
+      const position = point(coordinates);
+      const viewport = window.visualViewport;
+      const viewportX =
+        position.x +
+        this.options.host.getBoundingClientRect().left -
+        (viewport?.offsetLeft ?? 0);
+      const viewportWidth = viewport?.width ?? window.innerWidth;
       return {
-        ...point(coordinates),
+        ...position,
+        // Keep the outer screen edge available to native back/forward gestures.
+        systemEdge: touch && (viewportX < 12 || viewportX > viewportWidth - 12),
         time: performance.now(),
         selected: Boolean(contents.window.getSelection()?.toString()),
         interactive: Boolean(
@@ -1805,21 +1819,26 @@ class EpubReaderSession implements ReaderSession {
     const gesture = (
       first: GestureStart,
       last: { clientX: number; clientY: number },
+      phase: 'move' | 'end' = 'end',
     ) => {
       const end = point(last);
-      return readerGesture({
-        ...first,
-        endX: end.x,
-        endY: end.y,
-        duration: performance.now() - first.time,
-        width: this.options.host.clientWidth,
-        selected:
-          first.selected || Boolean(contents.window.getSelection()?.toString()),
-        mode: this.preferences.mode,
-        rtl:
-          contents.window.getComputedStyle(contents.document.body).direction ===
-          'rtl',
-      });
+      return readerGesture(
+        {
+          ...first,
+          endX: end.x,
+          endY: end.y,
+          duration: performance.now() - first.time,
+          width: this.options.host.clientWidth,
+          selected:
+            first.selected ||
+            Boolean(contents.window.getSelection()?.toString()),
+          mode: this.preferences.mode,
+          rtl:
+            contents.window.getComputedStyle(contents.document.body)
+              .direction === 'rtl',
+        },
+        phase,
+      );
     };
     const finishGesture = (
       first: GestureStart,
@@ -1827,7 +1846,11 @@ class EpubReaderSession implements ReaderSession {
       mouse = false,
     ) => {
       const kind = gesture(first, last);
-      if (Math.abs(point(last).x - first.x) >= 48 || mouse) {
+      if (
+        mouse ||
+        ((kind === 'next' || kind === 'previous') &&
+          Math.abs(point(last).x - first.x) > 10)
+      ) {
         perform(kind);
         return;
       }
@@ -1931,7 +1954,10 @@ class EpubReaderSession implements ReaderSession {
         const touch = event.touches.length === 1 ? event.touches[0] : undefined;
         pageTouch =
           touch && this.preferences.mode === 'paginated'
-            ? { id: touch.identifier, first: startGesture(touch, event.target) }
+            ? {
+                id: touch.identifier,
+                first: startGesture(touch, event.target, true),
+              }
             : null;
         noteTap =
           anchor && touch && explicitNoteLink(anchor)
@@ -1956,7 +1982,7 @@ class EpubReaderSession implements ReaderSession {
           !event.cancelable
         )
           return;
-        const kind = gesture(pageTouch.first, touch);
+        const kind = gesture(pageTouch.first, touch, 'move');
         if (kind === 'next' || kind === 'previous') event.preventDefault();
       },
       { passive: false, signal: listeners.signal },
@@ -1973,6 +1999,8 @@ class EpubReaderSession implements ReaderSession {
           const kind = gesture(swipe.first, last);
           if (kind === 'next' || kind === 'previous') {
             if (event.cancelable) event.preventDefault();
+            const anchor = linkAt(event.target);
+            if (anchor) touchActivation = { anchor, time: performance.now() };
             if (tap) clearTimeout(tap);
             perform(kind);
             return;

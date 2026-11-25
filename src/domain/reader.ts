@@ -126,39 +126,50 @@ export function flattenNavigation(items: EpubNavItem[]): EpubNavItem[] {
   return items.flatMap((item) => [item, ...flattenNavigation(item.children)]);
 }
 export type ReaderGesture = 'next' | 'previous' | 'toggle' | 'none';
-export function readerGesture(input: {
-  x: number;
-  y: number;
-  endX: number;
-  endY: number;
-  width: number;
-  duration: number;
-  selected: boolean;
-  interactive: boolean;
-  mode: ReaderPreferences['mode'];
-  rtl: boolean;
-}): ReaderGesture {
-  if (input.selected || input.x < 20 || input.x > input.width - 20)
+export function readerGesture(
+  input: {
+    x: number;
+    y: number;
+    endX: number;
+    endY: number;
+    width: number;
+    duration: number;
+    selected: boolean;
+    interactive: boolean;
+    mode: ReaderPreferences['mode'];
+    rtl: boolean;
+    systemEdge?: boolean;
+  },
+  phase: 'move' | 'end' = 'end',
+): ReaderGesture {
+  const pages = input.mode === 'paginated';
+  if (
+    input.selected ||
+    (!pages && (input.x < 20 || input.x > input.width - 20))
+  )
     return 'none';
   const dx = input.endX - input.x;
-  const dy = input.endY - input.y;
+  const dy = Math.abs(input.endY - input.y);
+  const distance = pages ? (phase === 'move' ? 14 : 34) : 48;
   if (
-    input.duration <= 1000 &&
-    (!input.interactive || input.mode === 'paginated') &&
-    Math.abs(dx) >= 48 &&
-    Math.abs(dx) > Math.abs(dy) * 1.5
+    !input.systemEdge &&
+    input.duration <= (pages ? 2400 : 1000) &&
+    (!input.interactive || pages) &&
+    Math.abs(dx) >= distance &&
+    Math.abs(dx) > dy * (pages ? 1.15 : 1.5)
   )
     return dx < 0 !== input.rtl ? 'next' : 'previous';
   if (
+    phase === 'move' ||
     input.interactive ||
     input.duration > 350 ||
     Math.abs(dx) > 10 ||
-    Math.abs(dy) > 10
+    dy > 10
   )
     return 'none';
-  if (input.mode === 'paginated' && input.x < input.width * 0.22)
+  if (pages && input.x < input.width * 0.22)
     return input.rtl ? 'next' : 'previous';
-  if (input.mode === 'paginated' && input.x > input.width * 0.78)
+  if (pages && input.x > input.width * 0.78)
     return input.rtl ? 'previous' : 'next';
   return 'toggle';
 }

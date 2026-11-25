@@ -73,10 +73,31 @@ describe('навигация чтения', () => {
     expect(readerGesture({ ...gesture, duration: 600, endX: 120 })).toBe(
       'next',
     );
-    expect(readerGesture({ ...gesture, x: 5, endX: 200 })).toBe('none');
+    expect(
+      readerGesture({ ...gesture, x: 5, endX: 200, systemEdge: true }),
+    ).toBe('none');
     expect(
       readerGesture({ ...gesture, mode: 'scroll', x: 330, endX: 330 }),
     ).toBe('toggle');
+  });
+  it('принимает медленный, диагональный и начатый рядом с краем свайп в страницах', () => {
+    expect(readerGesture({ ...gesture, x: 375, endX: 200 })).toBe('next');
+    expect(readerGesture({ ...gesture, x: 15, endX: 125 })).toBe('previous');
+    expect(readerGesture({ ...gesture, duration: 1450, endX: 140 })).toBe(
+      'next',
+    );
+    expect(readerGesture({ ...gesture, endX: 136, endY: 245 })).toBe('next');
+    expect(readerGesture({ ...gesture, endX: 155, endY: 265 })).toBe('none');
+    expect(readerGesture({ ...gesture, x: 8, endX: 8, systemEdge: true })).toBe(
+      'previous',
+    );
+    expect(readerGesture({ ...gesture, endX: 184, endY: 211 }, 'move')).toBe(
+      'next',
+    );
+    expect(readerGesture({ ...gesture, endX: 184, endY: 211 })).toBe('none');
+    expect(readerGesture({ ...gesture, x: 365, endX: 365 }, 'move')).toBe(
+      'none',
+    );
   });
   it('не ставит повторные перелистывания в очередь', async () => {
     vi.useFakeTimers();
