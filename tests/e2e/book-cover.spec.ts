@@ -139,6 +139,8 @@ for (const format of ['epub', 'fb2', 'carrie'] as const) {
           distance?: number;
           down?: number;
           interval?: number;
+          returnToStart?: boolean;
+          cancel?: boolean;
         } = {},
       ) => {
         const distance = options.distance ?? 176;
@@ -153,7 +155,9 @@ for (const format of ['epub', 'fb2', 'carrie'] as const) {
           type: 'touchStart',
           touchPoints: [point(0)],
         });
-        for (const fraction of [0.25, 0.5, 0.75, 1]) {
+        for (const fraction of options.returnToStart
+          ? [0.25, 0.5, 0.75, 1, 0]
+          : [0.25, 0.5, 0.75, 1]) {
           await new Promise((resolve) =>
             setTimeout(resolve, options.interval ?? 75),
           );
@@ -163,7 +167,7 @@ for (const format of ['epub', 'fb2', 'carrie'] as const) {
           });
         }
         await cdp.send('Input.dispatchTouchEvent', {
-          type: 'touchEnd',
+          type: options.cancel ? 'touchCancel' : 'touchEnd',
           touchPoints: [],
         });
       };
@@ -202,16 +206,44 @@ for (const format of ['epub', 'fb2', 'carrie'] as const) {
         });
       if (swipeBaseline) {
         const y = await imageRow(cover);
-        for (const options of [
-          { from: box.width - 15 },
-          { interval: 350 },
-          { distance: 64, down: 45 },
-        ]) {
-          await swipe(-1, { ...options, y });
-          await new Promise((resolve) => setTimeout(resolve, 350));
-          await atPage(1);
-        }
-        await swipe(-1, { y });
+        await host.evaluate((element) => {
+          const doc = element.querySelector('iframe')?.contentDocument;
+          if (!doc) throw new Error('Книга не отображается.');
+          for (const type of [
+            'touchstart',
+            'touchmove',
+            'touchend',
+            'touchcancel',
+          ])
+            doc.addEventListener(
+              type,
+              () => {
+                const root = doc.documentElement;
+                root.setAttribute(
+                  'data-gesture-trace',
+                  (root.getAttribute('data-gesture-trace') ?? '') + type + ' ',
+                );
+              },
+              true,
+            );
+        });
+        const trace = frame.locator('html');
+        await swipe(-1, {
+          y: Math.min(y, box.y + box.height - 24),
+          distance: 30,
+        });
+        await expect(trace).toHaveAttribute(
+          'data-gesture-trace',
+          /^touchstart (touchmove )+touchend /u,
+        );
+        await atPage(1);
+        await swipe(-1, {
+          y,
+          from: box.width - 15,
+          distance: 64,
+          down: 45,
+          interval: 350,
+        });
         await atPage(2);
         return;
       }
@@ -225,7 +257,17 @@ for (const format of ['epub', 'fb2', 'carrie'] as const) {
       await swipe(-1, { y: coverY, from: box.width - 6 });
       await new Promise((resolve) => setTimeout(resolve, 350));
       await atPage(1);
-      await swipe(-1, { y: coverY, from: box.width - 15 });
+      await swipe(-1, { y: coverY, distance: 30, cancel: true });
+      await swipe(-1, { y: coverY, distance: 30, returnToStart: true });
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      await atPage(1);
+      await expect(appearance).toBeEnabled();
+      await swipe(-1, {
+        y: coverY,
+        from: box.width - 15,
+        distance: 30,
+        down: 6,
+      });
       await atPage(2);
       await tapBelowIllustration();
       await atPage(1);
@@ -237,6 +279,7 @@ for (const format of ['epub', 'fb2', 'carrie'] as const) {
         await swipe(-1, {
           y: await imageRow(illustration),
           from: box.width / 2,
+          distance: 30,
           interval: 350,
         });
         await atPage(3);
@@ -288,6 +331,7 @@ for (const format of ['epub', 'fb2', 'carrie'] as const) {
       await jump(pageAtBoundary);
       await showStep();
       const diagonal = { distance: 64, down: 45 };
+      const short = { distance: 30, down: 8 };
       await swipe(-1, diagonal);
       await atPage(pageAtBoundary + 1);
       if (format !== 'carrie')
@@ -296,11 +340,11 @@ for (const format of ['epub', 'fb2', 'carrie'] as const) {
         ).toBeInViewport();
       else await expect(counter).toHaveAttribute('title', /^Часть вторая/u);
       await showStep();
-      await swipe(1);
+      await swipe(1, short);
       await atPage(pageAtBoundary);
       await tap(0.5);
       await expect(appearance).toBeHidden();
-      await swipe(-1, diagonal);
+      await swipe(-1, short);
       await atPage(pageAtBoundary + 1);
       await expect(appearance).toBeHidden();
       await swipe(1, { from: 15 });
@@ -352,7 +396,7 @@ for (const format of ['epub', 'fb2', 'carrie'] as const) {
               Math.ceil(element.scrollWidth / element.clientWidth),
             ));
         await jump(resizedBoundary);
-        await swipe(-1, { ...diagonal, interval: 350 });
+        await swipe(-1, { ...short, interval: 350 });
         await atPage(resizedBoundary + 1);
         await swipe(1, { from: 15 });
         await atPage(resizedBoundary);
@@ -360,7 +404,7 @@ for (const format of ['epub', 'fb2', 'carrie'] as const) {
         await expect(appearance).toBeHidden();
         await swipe(-1, diagonal);
         await atPage(resizedBoundary + 1);
-        await swipe(1);
+        await swipe(1, short);
         await atPage(resizedBoundary);
         await expect(appearance).toBeHidden();
         await tap(0.5);

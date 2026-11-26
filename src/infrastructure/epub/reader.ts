@@ -1863,7 +1863,10 @@ class EpubReaderSession implements ReaderSession {
     let multitouch = false;
     const pointers = new Set<number>();
     let tap: ReturnType<typeof setTimeout> | null = null;
-    let lastTap = -Infinity;
+    const clearTap = () => {
+      if (tap !== null) clearTimeout(tap);
+      tap = null;
+    };
     const perform = (kind: 'next' | 'previous' | 'toggle' | 'none') => {
       if (kind === 'toggle') this.options.onToggleControls();
       else if (kind !== 'none' && !this.speedStop)
@@ -1915,14 +1918,10 @@ class EpubReaderSession implements ReaderSession {
         return;
       }
       if (kind === 'none') return;
-      const now = performance.now();
-      if (now - lastTap < 240) {
-        if (tap) clearTimeout(tap);
-        tap = null;
-        lastTap = -Infinity;
+      if (tap !== null) {
+        clearTap();
         return;
       }
-      lastTap = now;
       tap = setTimeout(() => {
         tap = null;
         if (!contents.window.getSelection()?.toString()) perform(kind);
@@ -1940,7 +1939,7 @@ class EpubReaderSession implements ReaderSession {
         if (pointers.size > 1) {
           multitouch = true;
           start = null;
-          if (tap) clearTimeout(tap);
+          clearTap();
           return;
         }
         if (event.button !== 0) return;
@@ -1969,11 +1968,18 @@ class EpubReaderSession implements ReaderSession {
     );
     doc.addEventListener(
       'pointercancel',
-      () => {
+      (event) => {
+        // Paginated touch has its own cancel lifecycle. The browser can cancel
+        // a compatibility pointer stream while native touch continues.
+        if (
+          event.pointerType === 'touch' &&
+          this.preferences.mode === 'paginated'
+        )
+          return;
         start = null;
         pointers.clear();
         multitouch = false;
-        if (tap) clearTimeout(tap);
+        clearTap();
       },
       { signal: listeners.signal },
     );
@@ -2006,17 +2012,20 @@ class EpubReaderSession implements ReaderSession {
       time: number;
     } | null = null;
     let touchActivation: { anchor: Element; time: number } | null = null;
-    let pageTouch: { id: number; first: GestureStart } | null = null;
+    let pageTouch: { id: number; first: GestureStart; moved: boolean } | null =
+      null;
     doc.addEventListener(
       'touchstart',
       (event) => {
         const anchor = linkAt(event.target);
         const touch = event.touches.length === 1 ? event.touches[0] : undefined;
+        if (!touch) clearTap();
         pageTouch =
           touch && this.preferences.mode === 'paginated'
             ? {
                 id: touch.identifier,
                 first: startGesture(touch, event.target, true),
+                moved: false,
               }
             : null;
         noteTap =
@@ -2035,13 +2044,14 @@ class EpubReaderSession implements ReaderSession {
       'touchmove',
       (event) => {
         const touch = event.touches[0];
+        if (!pageTouch || !touch || touch.identifier !== pageTouch.id) return;
+        const current = point(touch);
         if (
-          !pageTouch ||
-          !touch ||
-          touch.identifier !== pageTouch.id ||
-          !event.cancelable
+          Math.abs(current.x - pageTouch.first.x) > 10 ||
+          Math.abs(current.y - pageTouch.first.y) > 10
         )
-          return;
+          pageTouch.moved = true;
+        if (!event.cancelable) return;
         const kind = gesture(pageTouch.first, touch, 'move');
         if (kind === 'next' || kind === 'previous') event.preventDefault();
       },
@@ -2057,19 +2067,22 @@ class EpubReaderSession implements ReaderSession {
         pageTouch = null;
         if (swipe && last?.identifier === swipe.id && !event.touches.length) {
           const kind = gesture(swipe.first, last);
-          if (kind === 'next' || kind === 'previous') {
+          const end = point(last);
+          const turn = Math.abs(end.x - swipe.first.x) > 10;
+          if (turn && (kind === 'next' || kind === 'previous')) {
             if (event.cancelable) event.preventDefault();
             const anchor = linkAt(event.target);
             if (anchor) touchActivation = { anchor, time: performance.now() };
-            if (tap) clearTimeout(tap);
+            clearTap();
             perform(kind);
             return;
           }
-          finishGesture(swipe.first, last);
+          if (!swipe.moved) finishGesture(swipe.first, last);
         }
         if (
           !first ||
           !last ||
+          swipe?.moved ||
           event.touches.length ||
           performance.now() - first.time > 420 ||
           Math.hypot(last.screenX - first.x, last.screenY - first.y) > 12 ||
@@ -2087,6 +2100,7 @@ class EpubReaderSession implements ReaderSession {
       () => {
         noteTap = null;
         pageTouch = null;
+        clearTap();
       },
       { signal: listeners.signal },
     );
@@ -2135,7 +2149,7 @@ class EpubReaderSession implements ReaderSession {
     return () => {
       listeners.abort();
       stopSelection();
-      if (tap) clearTimeout(tap);
+      clearTap();
     };
   }
   private endOperation() {

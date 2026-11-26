@@ -99,6 +99,21 @@ describe('навигация чтения', () => {
       'none',
     );
   });
+  it('распознаёт короткий уверенный свайп без случайных перелистываний', () => {
+    expect(readerGesture({ ...gesture, endX: 170, endY: 208 })).toBe('next');
+    expect(readerGesture({ ...gesture, endX: 230, duration: 1450 })).toBe(
+      'previous',
+    );
+    expect(readerGesture({ ...gesture, endX: 170, endY: 225 })).toBe('none');
+    expect(readerGesture({ ...gesture, endX: 178 })).toBe('none');
+    expect(readerGesture({ ...gesture, endX: 191 }, 'move')).toBe('next');
+    expect(
+      readerGesture({ ...gesture, endX: 191, interactive: true }, 'move'),
+    ).toBe('none');
+    expect(readerGesture({ ...gesture, endX: 170, mode: 'scroll' })).toBe(
+      'none',
+    );
+  });
   it('не ставит повторные перелистывания в очередь', async () => {
     vi.useFakeTimers();
     const gate = new ReaderNavigationGate();

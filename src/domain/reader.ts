@@ -151,20 +151,29 @@ export function readerGesture(
     return 'none';
   const dx = input.endX - input.x;
   const dy = Math.abs(input.endY - input.y);
-  const distance = pages ? (phase === 'move' ? 14 : 34) : 48;
+  const horizontal = Math.abs(dx);
+  const distance = pages
+    ? phase === 'move'
+      ? input.interactive
+        ? 12
+        : 8
+      : 24
+    : 48;
+  // Short turns need a clearer horizontal direction than a full-length swipe.
+  const directionRatio = pages ? (horizontal < 34 ? 1.35 : 1.15) : 1.5;
   if (
     !input.systemEdge &&
     input.duration <= (pages ? 2400 : 1000) &&
     (!input.interactive || pages) &&
-    Math.abs(dx) >= distance &&
-    Math.abs(dx) > dy * (pages ? 1.15 : 1.5)
+    horizontal >= distance &&
+    horizontal > dy * directionRatio
   )
     return dx < 0 !== input.rtl ? 'next' : 'previous';
   if (
     phase === 'move' ||
     input.interactive ||
     input.duration > 350 ||
-    Math.abs(dx) > 10 ||
+    horizontal > 10 ||
     dy > 10
   )
     return 'none';
